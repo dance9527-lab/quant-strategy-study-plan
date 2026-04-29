@@ -1,0 +1,76 @@
+{
+  "version": "2026-04-30-round2",
+  "scope": "official_strategy_evidence",
+  "consensus_sources": [
+    "consensus_audit_report_20260430.md",
+    "consensus_audit_round2.md"
+  ],
+  "default_walk_forward": {
+    "train_window_years": 5,
+    "rebalance_interval_trading_days": 21,
+    "min_oot_steps": 24,
+    "purge_days": 40,
+    "purge_multiplier": 3,
+    "embargo_days": 10,
+    "holdout_required": true,
+    "holdout_window": "last_12_months",
+    "holdout_trading_days_approx": 252,
+    "annual_analysis_required": true,
+    "market_regime_analysis_required": true
+  },
+  "label_rules": {
+    "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.purge_days)",
+    "qant_10d_legacy_note": "Earlier qant deep-dive experiments used purge_days=10 to isolate the known 10-day label leak. New official evidence must use the stricter Round 4/round2 rule max(horizon*3,40) unless a narrower diagnostic run is explicitly labeled as exploratory and excluded from keep decisions.",
+    "purge_sensitivity_days": [40, 60, 80]
+  },
+  "accepted_validation_modes": [
+    "chronological_walk_forward",
+    "purged_walk_forward",
+    "blocked_random_with_purge_embargo_for_diagnostic_only",
+    "combinatorial_purged_cv_for_sensitivity"
+  ],
+  "rejected_validation_modes": [
+    "naive_random_8_2_as_final_evidence",
+    "validation_with_oot_label_overlap",
+    "benchmark_or_cost_changes_without_baseline_rerun"
+  ],
+  "overfit_audit_required": [
+    "deflated_sharpe_ratio",
+    "probability_of_backtest_overfitting",
+    "holdout_window",
+    "parameter_perturbation",
+    "annual_and_market_regime_stability",
+    "false_discovery_rate_if_factor_count_gt_20"
+  ],
+  "s1_acceptance_gate": {
+    "gate_logic": "hard_gate_all_required",
+    "rank_ic_t_stat_min": 1.65,
+    "bootstrap_p_max": 0.1,
+    "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min OR block_bootstrap_p < bootstrap_p_max",
+    "block_bootstrap_days": 21,
+    "bootstrap_samples_min": 5000,
+    "fdr_required_if_factor_count_gt": 20,
+    "holdout_window": "last_12_months",
+    "holdout_sharpe_min": 0.0,
+    "holdout_direction_consistent": true,
+    "annual_turnover_max": 3.0,
+    "cost_after_excess_return_positive": true,
+    "capacity_report_required": true,
+    "limit_lock_report_required": true
+  },
+  "exploratory_tracking": {
+    "direction_consistency_min": 0.65,
+    "recent_consistency_steps": 6,
+    "recent_consistency_min": 4,
+    "cooldown_months_min": 6,
+    "cooldown_start": "first_entered_exploratory_tracking_date",
+    "portfolio_allowed": false,
+    "complete_record_required": true,
+    "counts_toward_attempt_count": true
+  },
+  "regime_alert": {
+    "ic_rolling_window_days": 20,
+    "alert_only_before_validation": true,
+    "position_change_requires_walk_forward_validation": true
+  }
+}
