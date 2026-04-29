@@ -25,7 +25,7 @@
 - [x] 修订短总纲。
 - [x] 修订详细执行规范。
 - [x] 校验文档不引入未经验证收益承诺或泄漏风险。
-- [ ] 提交并同步到 GitHub。
+- [x] 提交并同步到 GitHub。
 
 ### 主控原则
 
@@ -48,3 +48,8 @@
 - `git diff --check` 无空白错误，仅提示 Windows 下 LF 可能转换为 CRLF。
 - 搜索确认未将 `15-35%`、`2-4%`、`3-5%` 等收益路径写成承诺；只保留“不得承诺未经实证收益”的约束。
 - Git 项目两份策略文档已同步回 `D:\data\strategy` 作为本地镜像，SHA256 一致。
+
+### 同步结果
+
+- 提交：`0ffc11f Incorporate three-party audit feedback`。
+- 推送：`main -> origin/main` 成功。

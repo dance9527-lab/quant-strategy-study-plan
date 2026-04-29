@@ -31,3 +31,6 @@
   - `git diff --check` 无空白错误，只有 Windows 换行提示。
   - 搜索确认没有把审计报告中的收益区间写成承诺。
   - 已将 Git 项目中的两份策略文档同步回 `D:\data\strategy`，SHA256 与 Git 工作区一致。
+- 已提交并推送：
+  - `0ffc11f Incorporate three-party audit feedback`
+  - `main -> origin/main`
