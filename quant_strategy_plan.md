@@ -58,18 +58,19 @@
 
 ### 1.4 三方审计后的独立裁决
 
-`三方审计报告_20260430.md` 给当前计划的共识评分为 `6.0-6.5/10`。我对其意见的裁决如下：
+`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 对齐，作为当前执行口径，核心参数以该共识和本文档为准。
 
 | 审计意见 | 裁决 | 写入方式 |
 |---|---|---|
 | 涨跌停执行风险是 P0 | 采纳 | 任何组合回测必须报告涨停禁买、跌停禁卖、连续锁死和反转统计；纸面 alpha 若无法成交则不计为有效 alpha。 |
 | 开盘冲击三段模型是 P0 | 部分采纳 | 日频阶段先用 open/amount/participation 做保守冲击和容量惩罚；集合竞价和分钟三段模型需等 `prices_minute`/竞价表入仓后升级。 |
 | 因子 PIT 合规是 P0 | 采纳 | 市值/估值/行业/风险警示均需通过实验层 PIT audit；warehouse leakage PASS 不能替代因子层审计。 |
-| walk-forward 参数固化 | 采纳 | 官方证据默认 5 年训练、21 个交易日调仓、`purge_days >= max(horizon,20)`、embargo 5、至少 12 个 OOT step。 |
+| walk-forward 参数固化 | 采纳并升级 | 官方证据默认 5 年训练、21 个交易日调仓、`purge_days >= max(horizon*3,40)`、embargo 10、至少 24 个 OOT step，并做分年度/市场状态分析。 |
 | Deflated Sharpe 和 holdout 默认化 | 采纳 | 所有可 keep 的组合结果必须做过拟合审计和 holdout/稳定性复核。 |
-| S1 完成标准量化 | 采纳 | S1 通过条件新增 IC t-stat、bootstrap p、换手、成本后超额和容量门槛。 |
+| S1 完成标准量化 | 部分采纳 | `t>=1.65` 或 block bootstrap `p<0.10` 只作为 candidate gate；keep/晋级还必须通过 holdout、FDR、DSR/PBO、成本后超额和容量/成交约束。 |
 | 分红送配从 P2 提到 P1.5 | 部分采纳 | 作为 Phase A 并行 ETL，不阻塞首轮价格/收益基线，但阻塞 total-return 和基本面增强结论。 |
 | 风险开关 v1 | 采纳 | 放入 S1 通过后的强制风险模块，默认 100/60/30/0 仓位状态只作为待验证 v1。 |
+| 另类数据和筹码提前 | 部分采纳 | 北向、融资融券、限售解禁和筹码可提前做 source registration、ETL 和 candidate tracking；未通过 PIT/覆盖率/时点审计前不得进入官方 S1 keep。 |
 | DeepSeek 收益路径和 alpha 区间 | 不作为承诺采纳 | 只能作为假设队列，所有收益区间必须由本地实验重新验证。 |
 
 ---
@@ -85,10 +86,11 @@
 3. 市场状态和风险开关：指数趋势、市场宽度、波动率、涨跌停压力。
 4. PIT 行业中性和行业轮动：只使用 `pit_industry_intervals_akshare`，固定分类标准。
 5. qant 小盘模型重审：只用 corrected baseline、OOT purge、blocked validation 和 embargo。
+6. 外部数据候选 ETL：北向、融资融券、限售解禁、筹码只做可审计入仓准备和 exploratory tracking，不直接作为官方 alpha 结论。
 
 暂不作为第一批核心 alpha 的方向：
 
-- 筹码增强：原始数据有价值，但尚未形成可审计 warehouse 主表，先做 ETL 和时点验证。
+- 筹码增强：原始数据有价值，但尚未形成可审计 warehouse 主表，先做 P1/P1.5 并行 ETL、source registration 和 PIT 可用性审计，alpha 结论后置。
 - 涨停事件：需先将事件表入仓，并严格区分盘后策略和盘中打板。
 - 分钟策略：优先服务执行和滑点建模，不承诺普通 A 股 T+0 alpha。
 - 期权策略：数据期短且缺 bid/ask、保证金、盘口深度和真实成交概率，先做研究储备。
@@ -102,14 +104,16 @@
 |---|---|---|---|---|
 | P0 | 实验层 PIT/label/validation audit | 策略证据输出前必须通过 | 防止 warehouse PASS 后在实验层重新引入泄漏 | 立即固化 |
 | P0 | 涨跌停和开盘执行门槛 | 任何组合回测前必须纳入 | 过滤纸面可得但真实不可成交的 alpha | 立即固化 |
-| P1 | 日频多因子强基线 | P0 audit 通过 | 证明 warehouse 下可交易超额是否存在 | 立即启动 |
-| P1 | 基础容量压力测试 | P0 成交规则可运行 | 量化真实成交边界和成本拖累 | 随 S1 同步输出 |
+| P1 | 日频多因子强基线 | P0 audit 通过 | 证明 warehouse 下可交易超额是否存在 | 立即启动，使用 Round 4 验证参数 |
+| P1 | 基础容量压力测试 | P0 成交规则可运行 | 用 trailing ADV、参与率、成交失败和市值分档量化真实成交边界 | 随 S1 同步输出 |
+| P1 | 候选另类数据 ETL | source/available_at 先行 | 北向、融资融券、限售解禁只进入 candidate tracking | 不阻塞传统因子 S1 |
 | P1.5 | 风险状态和仓位开关 v1 | S1 有正向证据后 | 降低回撤和波动 | S1 通过后强制验证 |
+| P1.5 | 筹码 ETL 和 PIT 审计 | source/算法/available_at 先行 | 判断旧筹码数据能否进入 canonical warehouse | 不先作为 alpha 结论 |
 | P1.5 | 公司行为/分红送配 ETL | source/available_at 先行 | total-return 和基本面 PIT 校验 | Phase A 并行准备 |
 | P2 | PIT 行业中性和行业轮动 | 固定分类标准并验证覆盖 | 约束暴露、研究行业动量和拥挤 | 基线后启动 |
 | P2 | qant 小盘模型重审 | 必须 purge/embargo | 判断旧 132 特征是否有可救增量 | 作为反例驱动重审 |
 | P2 | AkShare 低频外部数据 | schema、available_at、质量检查先行 | 财务、公司行为、融资融券、解禁等增强 | 单独 ETL 阶段 |
-| P3 | 筹码增强 | `chip_daily` 入仓并验证时点 | A 股特色增量 alpha | ETL 后研究 |
+| P3 | 筹码 alpha | `chip_daily` 入仓并验证时点 | A 股特色增量 alpha | ETL/PIT 审计通过后研究 |
 | P3 | 涨停事件卫星 | `limit_events` 入仓并验证成交 | 小仓位事件策略 | ETL 后研究 |
 | P3 | 分钟执行优化 | 5min/1min 分区表可用 | VWAP、滑点、冲击成本 | 服务执行，不先做 alpha |
 | P4 | 期权波动率和保护性对冲 | 期权链、IV、Greeks、流动性模型完成 | 风险对冲和研究储备 | 后置 |
@@ -137,8 +141,8 @@
 
 - CatBoost：用于类别特征和稳健树模型对照。
 - GARCH/HAR-RV：用于波动率和风险状态。
-- TFT、N-HiTS、PatchTST、iTransformer：用于多周期时序增强。
-- AutoGluon-TimeSeries、Darts、NeuralForecast：只作为快速模型比较平台。
+- 轻量 LSTM 或 1D-CNN：仅作为 P4 对照，不早于强基线和审计框架稳定后进入。
+- TFT、N-HiTS、PatchTST、iTransformer、AutoGluon-TimeSeries、Darts、NeuralForecast：本地路线降级为研究储备或云端实验，不作为近期执行计划。
 
 当前本机已可用：`lightgbm`、`xgboost`、`qlib`、`cvxpy`、`torch`。  
 当前尚未安装或未验证：`arch`、`vectorbt`、`riskfolio-lib`、`PyPortfolioOpt`、`catboost`、`darts`、`neuralforecast`。这些依赖应在对应阶段进入前再安装和验证。
@@ -159,10 +163,10 @@
 |---:|---|---|---|
 | 1 | 公司行为、分红、送配 | total return、分红因子、复权校验 | P1.5 并行最小 ETL |
 | 2 | 财报、业绩预告、业绩快报 | 质量、成长、盈利修正 | P2 优先接入 |
-| 3 | 融资融券明细 | 杠杆资金和拥挤度 | P2 接入 |
-| 4 | 股东户数、质押、限售解禁 | 供给压力和风险过滤 | P2 接入 |
+| 3 | 融资融券明细 | 杠杆资金和拥挤度 | P1 candidate ETL，PIT 审计前不进 keep |
+| 4 | 股东户数、质押、限售解禁 | 供给压力和风险过滤 | 限售解禁 P1 candidate ETL，其余 P2 |
 | 5 | 分析师预期修正 | 预期变化和事件驱动 | P2 候选，需可审计历史源 |
-| 6 | 北向资金 | 资金流状态 | P3 接入 |
+| 6 | 北向资金 | 资金流状态 | P1 candidate ETL，PIT 审计前不进 keep |
 | 7 | 龙虎榜、大宗交易 | 事件风险和情绪 | P3 接入 |
 | 8 | 公告、新闻、NLP | 潜在高价值但稳定性低 | P4 研究 |
 
@@ -192,10 +196,11 @@
 - **多重检验**：候选因子>20个时，必须报告FDR校正后的显著性
 - **尾部风险**：S1报告模板必须记录MaxDD/VaR/CVaR/Sortino/Calmar（不作为门槛，S2引入）
 - **Exploratory Tracking机制**：方向一致性≥65% + 冷却期≥6个月 + 不入组合 + 完整记录
+- 若机器可读参数镜像与本节冲突，以本文档和 `consensus_audit_report_20260430.md` 为准；执行前必须在本地生成或校验一致的参数 hash。
 
 ### 因子库扩展
-- P1阶段同步纳入3-5个另类数据因子（北向资金、融资融券）
-- 筹码数据ETL从P3提前到P1阶段
+- P1阶段同步做3-5个另类数据源的 source registration 和 candidate ETL（北向资金、融资融券、限售解禁优先）
+- 筹码数据ETL从P3提前到P1/P1.5并行准备；PIT、覆盖率、算法解释和异常值审计通过前不进入官方 S1 keep
 
 ### 新增验证项
 - 因子正交化流程（ICIR加权前）
@@ -209,7 +214,7 @@
 
 ### 容量测试前移
 - S1阶段增加最简容量过滤（日均成交额>1000万）
-- S2做精细容量分析（分档滑点/冲击/参与率）
+- S1同步报告 trailing ADV、参与率、成交失败率、涨跌停压力和市值分档 IC；S2做精细容量分析（分档滑点/冲击/参与率）
 
 详细共识报告见：consensus_audit_report_20260430.md
 
@@ -238,7 +243,7 @@
 
 产出：
 
-- `validation_params.json` 固化的 walk-forward 参数。
+- Round 4 固化的 walk-forward 参数和本地参数 hash。
 - 实验层 PIT audit、split label audit、benchmark audit。
 - 涨跌停禁买/跌停禁卖、连续锁死、开盘冲击和成交失败报告。
 - 因子覆盖率和质量报告。
