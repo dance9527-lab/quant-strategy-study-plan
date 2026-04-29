@@ -100,7 +100,7 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 | 审计 | 最小要求 | 产物 |
 |---|---|---|
 | 因子 PIT 审计 | 检查每个特征的 `source`、`available_at`、`decision_time`、截面成员和复权生效规则 | `pit_factor_audit` 报告或等价表 |
-| 验证参数固化 | 引用 Round 4 参数并记录本地参数镜像的 SHA256；若机器可读镜像与本文档冲突，以本文档和 `consensus_audit_report_20260430.md` 为准 | `validation_params_hash` |
+| 验证参数固化 | 引用 Round 4/round2 参数并记录本地参数镜像的 SHA256；机器可读镜像只在本地维护、不提交 Git；若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md` 和 `consensus_audit_round2.md` 为准 | `validation_params_hash` |
 | benchmark 审计 | 确认 benchmark 来源、可得日、覆盖区间、是否为官方或内部代理 | `benchmark_audit` 报告 |
 
 ---
@@ -357,12 +357,13 @@ AkShare 接入后再进入：
 | 最少 OOT step | 24 |
 | bootstrap | Block Bootstrap，block=21 个交易日，至少 5000 次 |
 | 多重检验 | 候选因子 > 20 个时必须做 FDR 校正 |
-| holdout | 必须保留，不参与调参、特征选择、early stopping 或阈值选择；通过条件至少为方向一致且 Sharpe > 0 |
+| holdout | 最后 12 个月（约 252 个交易日）作为最终验收窗口；不参与调参、特征选择、early stopping、阈值选择或仓位开关选择；通过条件至少为方向一致且 Sharpe > 0 |
 
 主证据：
 
 - chronological walk-forward。
 - OOT 月、21 个交易日窗口或 OOT 年，必须在实验登记中预先声明。
+- 24 个 OOT step 原则上在 holdout 窗口之前完成；holdout 只用于最终验收。
 - Purged split。
 - Embargo。
 - split label audit。
@@ -381,7 +382,7 @@ AkShare 接入后再进入：
 - 任何使用未来收益标签的训练、验证、early stopping、阈值选择或调参样本，都必须先做 OOT 边界 purge。
 - random 只能作为 blocked random 诊断，且必须同时有 `validation_purge_days` 和 `embargo_days`。
 - 未报告 split label audit 的模型结果不得进入 keep、晋级或总纲结论。
-- 偏离 Round 4 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；若 `validation_params.json` 或其他机器可读镜像与本文档冲突，以本文档为准并先在本地修正镜像后再执行。
+- 偏离 Round 4/round2 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 只是本地机器可读镜像，不作为 Git 活跃文档。若镜像与本文档冲突，以本文档为准并先在本地修正镜像后再执行。
 
 ### 7.2 最小报告指标
 
@@ -454,7 +455,7 @@ AkShare 接入后再进入：
 - Deflated Sharpe Ratio。
 - Probability of Backtest Overfitting。
 - White Reality Check 或同类 data snooping 检验。
-- holdout 窗口复核。
+- 最后 12 个月 holdout 窗口复核；12 vs 18 个月只可作为 S2 预注册敏感性实验，不得事后择优。
 - `attempt_count` 和候选数口径。
 - holdout 不得参与调参、特征筛选、early stopping 或仓位阈值选择。
 
@@ -531,20 +532,33 @@ S1 内置最小交易可行性，不能等到 S2：
 - 必须报告涨停买不到、跌停卖不出、连续锁死、成交失败率和解锁后反转。
 - 至少报告 1000 万、5000 万、1 亿资金档；若 1 亿失效，应明确容量上限。
 
-S1 完成门槛：
+S1 完成门槛分三层：
 
-- 至少 24 个 walk-forward OOT step。
-- Candidate gate：RankIC 或核心 IC 均值为正，且 t-stat >= 1.65 或 block bootstrap p-value < 0.10（满足其一即可）。
-- Keep/晋级 gate：通过 candidate gate 后，还必须通过 FDR（如适用）、holdout、DSR/PBO 或等价过拟合审计、成本后超额、容量和成交失败约束。
-- Exploratory Tracking：方向一致性 >= 65%、冷却期 >= 6 个月、不入组合、完整记录并计入 `attempt_count`/候选数口径；它只用于记录接近但未达标的弱信号，不构成 keep 证据。
-- 候选因子 > 20 个时，必须报告 FDR 校正后的显著性。
-- 尾部风险报告：必须记录 Max Drawdown、VaR(95%)、CVaR(99%)、Sortino、Calmar（S1报告模板，不作为通过门槛）。
+Hard Gate（一票否决，必须全部通过）：
+
+- 至少 24 个 walk-forward OOT step，且原则上在最后 12 个月 holdout 窗口之前完成。
+- 因子 PIT audit、split label audit、benchmark audit 通过。
+- RankIC 或核心 IC 均值为正，且 t-stat >= 1.65 或 block bootstrap p-value < 0.10（满足其一即可）。
+- holdout 为最后 12 个月，方向和主窗口一致，且 holdout Sharpe > 0。
 - 成本后超额收益为正。
+- 最低可执行容量和成交失败不触发 fatal：1000 万资金档必须可解释，涨跌停/停牌导致的成交失败率不得吞噬主要 alpha。
+- 候选因子 > 20 个且结果用于 keep/晋级时，FDR 校正后仍通过预注册显著性要求。
+
+Soft Floor（报告并评估，不满足需说明理由）：
+
 - 年化双边换手 < 300%，除非策略明确被标注为高换手且容量/成本仍通过。
-- holdout 不失效，方向和主窗口一致，且 holdout Sharpe > 0。
 - 多数年份或多数市场状态不为单一窗口贡献。
 - 相对线性和简单打分有稳定增量。
-- 未通过上述门槛不得进入总纲收益结论，只能保留为 candidate 或 discard。
+- 容量和稳定性切片覆盖 trailing ADV、参与率、成交失败、涨跌停压力和市值五档；市值五档按当日 PIT 市值截面 P20/P40/P60/P80 切分，只用于稳定性分析，不替代容量判断。
+
+报告要求（记录不作为 S1 通过条件）：
+
+- 尾部风险报告：Max Drawdown、VaR(95%)、CVaR(99%)、Sortino、Calmar。
+- 分年度、分市场状态、分市值、分行业表现。
+- 成交失败率、容量指标和各因子类别通过率。
+- Exploratory Tracking：方向一致性定义为 24 个 OOT step 中 IC 符号与对应训练窗口 IC 符号相同的窗口数量 / 24 >= 65%，且最近 6 步中至少 4 步一致；冷却期 >= 6 个月，从因子首次进入 Exploratory Tracking 的日期起算，后续 walk-forward step 不重置；不入组合，完整记录并计入 `attempt_count`/候选数口径。
+
+未通过 Hard Gate 的结果不得进入总纲收益结论，只能保留为 candidate、exploratory_track 或 discard。
 
 
 ### 9.2 S2：交易可行性和容量压力测试
@@ -722,7 +736,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 - 通过因子 PIT audit、split label audit 和 benchmark audit。
 - 相对 corrected baseline 改善主指标。
 - 回撤、换手、成本、容量不明显恶化。
-- IC t-stat、bootstrap p、holdout 和 Deflated Sharpe 满足预注册门槛。
+- IC t-stat 或 block bootstrap p、最后 12 个月 holdout、FDR（如适用）和 Deflated Sharpe 满足预注册门槛。
 - 年度表现不过度集中。
 - 模型排序指标方向一致。
 - 不依赖改变 benchmark、费用、股票池或窗口取胜。
@@ -851,7 +865,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 
 - 风险开关报告。
 - 回撤改善报告。
-- 预注册 100/60/30/0 仓位 v1 对照。
+- S3 前 25/25/25/25 均匀权重占位和数据驱动仓位开关实验；100/60/30/0 只作为可选历史假设或挑战基线。
 - 行业、市值、beta、换手约束对比。
 
 ### Step 5：公司行为和外部低频数据 ETL
@@ -874,7 +888,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 ### 新增验证项
 
 1. **因子正交化流程**：在ICIR加权和Ridge之间增加Gram-Schmidt正交化，产物为正交化前后因子相关性矩阵对比。
-2. **regime断裂检测**：在walk-forward每个OOT step中单独报告regime断裂期表现，增加简单regime检测（基于波动率聚类或连续IC为负）。连续5日因子IC为负只能先作为风险开关候选告警，必须经 walk-forward 验证后才能成为实际减仓规则。
+2. **regime断裂检测**：在walk-forward每个OOT step中单独报告regime断裂期表现，增加简单regime检测（基于波动率聚类或20日滚动IC均值为负）。IC告警先只作为报告/yellow标记/暂停跟踪候选；暂停交易、降权或减仓必须经 walk-forward 验证后才能成为实际规则。实时风险开关应优先使用 ex-ante 市场宽度、波动率、跌停压力和成交额等变量。
 3. **尾部风险指标**：S1验证中增加VaR 95%、CVaR 99%、最大回撤持续期。
 4. **多重检验校正**：候选因子>20个时，必须报告FDR校正后的显著性。
 5. **季节性效应**：在因子中加入月份哑变量，或确保walk-forward训练窗口包含完整季节性周期。
@@ -895,6 +909,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 
 - S1阶段增加最简容量过滤：日均成交额>1000万。
 - S1报告中包含基础容量指标：trailing ADV、持仓市值/日均成交额比值、参与率、成交失败率、涨跌停压力和市值分档 IC。
+- 市值五档按当日 PIT 市值截面 P20/P40/P60/P80 切分，只用于稳定性切片；容量判断仍以 trailing ADV、参与率和成交失败率为主。
 - 精细容量分析（分档滑点/冲击/参与率）保留在S2。
 
 ### 数据缺口影响量化（S1启动前必做）
@@ -904,6 +919,9 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 | 有/无ST过滤的因子IC对比 | 量化ST PIT缺口影响 | 2小时 |
 | 有/无停牌推断的可交易universe对比 | 量化停牌推断精度 | 1小时 |
 | 不同embargo值（5/10/15）的OOT结果对比 | 确定最优embargo | 3小时 |
+| purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 8-16小时 |
+
+预备实验总耗时按 20-40 小时估算；该估算包括数据加载、因子计算、24 步 walk-forward 和报告生成，不应用旧 6 小时估算安排 S1。
 
 ## 14. 文档治理
 
@@ -919,7 +937,7 @@ Git 项目中的活跃文档只有两份：
 
 这些参考文档提供模型和方法论候选，但不覆盖本执行规范中的数据约束、验证约束和回测约束。
 
-每轮专家 review 后，如有采纳意见，优先修改 Git 项目中的这两份活跃文档，并在本仓库 `task_plan.md`、`findings.md`、`progress.md` 记录裁决理由。`D:\data\strategy\` 下旧副本不得与 Git 项目分叉维护。
+每轮专家 review 后，如有采纳意见，优先修改 Git 项目中的两份活跃策略文档；`task_plan.md`、`findings.md`、`progress.md` 只作为本地工作区规划文件，不提交 Git。`D:\data\strategy\` 下旧副本不得与 Git 项目分叉维护。
 
 
 
