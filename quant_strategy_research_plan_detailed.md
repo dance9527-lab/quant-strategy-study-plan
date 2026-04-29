@@ -1,0 +1,744 @@
+# A股量化策略研究执行规范（2026-04-30 版）
+
+> 本文件是后续量化策略实验的执行规范。所有策略实验、回测、模型训练和 review 都必须按本文件执行。  
+> 短总纲见 `quant_strategy_plan.md`。  
+> Canonical 数据源为 `D:\data\warehouse`。
+
+---
+
+## 1. 总原则
+
+### 1.1 研究目标
+
+本项目的目标不是寻找样本内最高收益曲线，而是建立可审计、可复现、可迭代、可落地的 A 股策略研究体系。
+
+所有策略必须证明：
+
+1. 数据无明显未来信息。
+2. 回测交易假设保守。
+3. 成本后仍有样本外价值。
+4. 年度、市场状态和参数扰动下不过度脆弱。
+5. 复杂度增加能被增量收益或风险改善解释。
+
+### 1.2 硬性时点约束
+
+所有特征、标签和交易必须满足：
+
+```text
+feature_time <= available_at <= decision_time < execution_time <= label_end_time
+```
+
+默认日频规则：
+
+- T 日行情、估值、风险警示等日频字段默认 T 日 16:00 后可见。
+- T 日盘后生成信号。
+- T+1 执行。
+- 普通 A 股不做 T+0。
+- 训练、验证、回测中不得使用 OOT 期间才可知道的未来 label。
+
+### 1.3 Canonical 数据源
+
+只以 `D:\data\warehouse` 为策略研究 canonical 数据源。
+
+允许使用但必须标注用途：
+
+- `D:\data\processed`：旧清洗产物盘点和复核，不直接进入策略。
+- `D:\quantum_a0\qant-codex-20260429`：旧模型和反例研究，不作为收益有效性证据。
+- AkShare：外部数据候选，接入前必须有 schema、`available_at`、质量检查和 source gap 报告。
+
+---
+
+## 2. 当前可用数据
+
+### 2.1 核心表
+
+| 表 | 行数 | 范围 | 策略用途 | 注意事项 |
+|---|---:|---|---|---|
+| `prices_daily_unadjusted` | 17,599,789 | 1990-12-19 至 2026-04-27 | 真实成交价、成交额、涨跌停、容量 | 不直接做长期收益标签 |
+| `prices_daily_returns` | 17,599,789 | 1990-12-19 至 2026-04-27 | `return_adjusted_pit` 用于收益、标签、绩效 | 禁止全样本前复权 |
+| `valuation_daily` | 16,642,794 | 2000-01-04 至 2026-04-27 | 市值、估值、股本、换手率 | T 日盘后可见，左连接 |
+| `tradability_daily` | 18,177,689 | 1990-12-19 至 2026-04-27 | bar 存在、推断停牌、可交易性 | 停牌是工程推断 |
+| `tradability_daily_enriched` | 18,177,689 | 1990-12-19 至 2026-04-27 | 涨跌停、买卖阻断、上市年龄、风险警示 | 第一版成交过滤首选 |
+| `universe_daily` | 18,177,689 | 1990-12-19 至 2026-04-27 | 基础和因子研究股票池 | 第一版研究首选 |
+| `benchmarks` | 31,229 | 1990-12-19 至 2026-04-27 | 全 A 代理、官方中证指数 | 禁止恢复同日成交额加权 |
+| `reference_rates` | 55,964 | 1990-12-19 至 2026-04-27 | 国债、Shibor、固定 fallback | 固定 1.5% 仅作 fallback |
+| `industry_classification.pit_industry_intervals_akshare` | 53,925 | 1990-01-29 至 2026-04-24 | PIT 行业中性和行业轮动 | 必须固定分类标准 |
+| `risk_warning_daily` | 8,973,264 | 1994-01-03 至 2026-04-27 | 风险警示过滤 | 深市历史较完整，沪/北不足 |
+| `trading_costs.equity_cost_history` | 23 | 1990-12-19 至 2023-08-28 | 交易成本 | 部分为研究假设 |
+
+### 2.2 数据缺口
+
+每份策略报告必须披露：
+
+- 2026-01-05 至 2026-02-05 的估值覆盖缺口。
+- `valuation_daily` 与收益表 key 不完全一致。
+- 完整交易所官方停复牌公告缺失。
+- 沪/北历史 ST、摘帽、摘星缺 PIT 官方源。
+- 历史 PIT 指数成分和权重缺失。
+- 三所官方历史差异日历未独立验证。
+- 成本中的佣金、滑点、冲击成本仍是研究假设。
+- 筹码、涨停、分钟、期权尚未形成可审计 warehouse 主表。
+
+### 2.3 数据质量门槛
+
+任意策略实验前必须确认：
+
+```powershell
+C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_check.py --warehouse D:\data\warehouse --workers 6
+```
+
+最小通过条件：
+
+- `leakage_check` PASS。
+- 所用表 `(asset_id, trade_date)` 或业务主键无重复。
+- `available_at <= decision_time`。
+- benchmark、reference rate、cost model 覆盖回测窗口。
+- 回测结束日不得晚于行情最大可用日。
+
+---
+
+## 3. 股票池和交易约束
+
+### 3.1 默认股票池
+
+第一版研究默认使用 `universe_daily.in_factor_research_universe=True`。
+
+若自定义股票池，必须从以下字段派生：
+
+- bar 是否存在。
+- 是否推断停牌。
+- 上市交易日年龄。
+- 是否风险警示。
+- 是否涨跌停买卖阻断。
+- 最近成交额和成交量。
+- 是否历史证券，避免幸存者偏差。
+
+禁止直接使用当前股票列表筛历史。
+
+### 3.2 默认成交规则
+
+默认日频组合回测：
+
+- T 日盘后信号。
+- T+1 开盘或保守 close-based 价格执行，必须标明。
+- 买入：涨停、一字涨停、停牌、无 bar、风险警示排除。
+- 卖出：跌停、一字跌停、停牌时成交失败或延迟。
+- 买入按 100 股整数手。
+- 现金和持仓每日结算。
+- T+1 限制：当日买入不可当日卖出。
+
+### 3.3 成本和容量
+
+成本必须来自 `trading_costs.equity_cost_history`，并在报告中列出：
+
+- 佣金。
+- 印花税。
+- 过户费。
+- 经手费、证管费等规费。
+- 滑点。
+- 冲击成本。
+
+容量压力测试至少覆盖：
+
+- 1000 万。
+- 5000 万。
+- 1 亿。
+- 5 亿，如策略表面容量足够。
+
+每档报告：
+
+- 平均参与率。
+- 最大参与率。
+- 成交失败率。
+- 成本拖累。
+- 单票集中度。
+- 换手。
+
+---
+
+
+
+## 4. 标签体系
+
+### 4.1 默认标签
+
+| 标签 | 计算 | 用途 | 必须 purge |
+|---|---|---|---|
+| `excess_ret_1d` | 个股 T+1 收益减 benchmark | 快速 IC | 1 个交易日 |
+| `excess_ret_5d` | 个股未来 5 日超额收益 | 周频选股 | 5 个交易日 |
+| `excess_ret_10d` | 个股未来 10 日超额收益 | qant 对照和中频模型 | 10 个交易日 |
+| `excess_ret_20d` | 个股未来 20 日超额收益 | 月频选股 | 20 个交易日 |
+| `rank_ret_5d/20d` | 同日横截面未来收益 rank | 排序模型 | 对应 horizon |
+| `top_quantile_5d/20d` | 是否进入未来收益 top 分位 | 分类模型 | 对应 horizon |
+| `realized_vol_20d` | 未来 20 日波动率 | 风险模型 | 20 个交易日 |
+| `max_dd_20d` | 买入后 20 日最大回撤 | 风控标签 | 20 个交易日 |
+
+标签从 `return_adjusted_pit` 计算，成交约束从未复权价格和可交易表计算。
+
+### 4.2 禁止标签和特征混用
+
+禁止：
+
+- 在特征表中存入 future return。
+- 用 T+1 或未来窗口的高低点做 T 日止盈止损特征。
+- 用未来涨跌停状态过滤训练样本。
+- 用未来行业、未来 ST、未来停牌状态构造历史股票池。
+
+### 4.3 qant 类 10 日标签特殊规则
+
+任何 10 日 forward label 必须：
+
+- 在 OOT 月边界剔除 `target_date_10d >= oot_start` 的训练候选样本。
+- 跑 split label audit。
+- 报告 train/validation 中跨 OOT label 行数。
+- 使用 `--purge-days 10` 或等价逻辑。
+
+---
+
+## 5. 因子库
+
+### 5.1 P1 核心日频因子
+
+先用已入仓表构建以下因子：
+
+| 类别 | 示例 | 来源 |
+|---|---|---|
+| 市值 | `log_total_mv`、`log_circ_mv` | `valuation_daily` |
+| 估值 | EP、BP、SP、股息率代理 | `valuation_daily` |
+| 流动性 | 成交额均值、换手率、Amihud illiquidity | 日 K、估值 |
+| 动量 | 5/20/60/120 日 PIT 复权收益 | `prices_daily_returns` |
+| 反转 | 1/3/5 日收益 | `prices_daily_returns` |
+| 波动率 | 20/60 日波动、下行波动、振幅 | 日 K、收益 |
+| 风险 | beta、残差波动、最大回撤 | benchmark、收益 |
+| 交易约束 | 上市年龄、涨跌停、停牌、ST | `tradability_daily_enriched` |
+| 行业 | PIT 行业哑变量、行业收益、行业动量 | PIT 行业表 |
+
+
+
+### 5.2 P2 外部低频因子
+
+AkShare 接入后再进入：
+
+- 分红、送转、配股、除权除息事件。
+- 财报、业绩预告、业绩快报。
+- 融资融券。
+- 股东户数。
+- 质押比例。
+- 限售解禁。
+- 北向资金。
+- 龙虎榜、大宗交易。
+
+### 5.3 P3 特色因子
+
+需先完成入仓和时点验证：
+
+- 筹码成本偏离、成本宽度、胜率、筹码迁移。
+- 涨停首板、连板、封单、打开次数、行业涨停宽度。
+- 分钟 VWAP、开盘冲击、收盘流动性、滑点曲线。
+- 期权 IV、skew、term structure、Greeks、PCR。
+
+---
+
+## 6. 模型体系
+
+### 6.1 基线优先级
+
+模型进入顺序：
+
+1. 单因子。
+2. 等权打分。
+3. ICIR 加权。
+4. Ridge、ElasticNet。
+5. LightGBM / XGBoost。
+6. LightGBM Ranker / LambdaRank。
+7. CatBoost。
+8. 深度时序模型。
+9. NLP / RL。
+
+任何复杂模型必须在同一数据、同一股票池、同一成本、同一验证切分下对比强基线。
+
+### 6.2 当前依赖状态
+
+已可用：
+
+- `lightgbm`
+- `xgboost`
+- `sklearn`
+- `qlib`
+- `cvxpy`
+- `torch`
+- `statsmodels`
+
+尚未安装或未验证：
+
+- `arch`
+- `vectorbt`
+- `riskfolio-lib`
+- `PyPortfolioOpt`
+- `catboost`
+- `darts`
+- `neuralforecast`
+
+缺失依赖只在对应阶段确实进入时安装，并记录版本、安装命令和最小 smoke test。
+
+### 6.3 深度模型准入
+
+TFT、N-HiTS、PatchTST、iTransformer、Chronos/TimesFM/Moirai 等只能在满足以下条件后进入：
+
+- 日频强基线完成。
+- walk-forward 与 purge/embargo 体系稳定。
+- 有明确额外收益来源，例如多周期分位数预测、波动率预测、场景生成。
+- 训练日志、随机种子、模型版本、输出缓存可复现。
+- 与 LightGBM/Ranker 同口径比较。
+
+深度模型不得以“模型先进”为进入理由。
+
+---
+
+## 7. 验证框架
+
+### 7.1 默认验证
+
+主证据：
+
+- chronological walk-forward。
+- OOT 月或 OOT 年。
+- Purged split。
+- Embargo。
+
+辅助诊断：
+
+- blocked random + purge + embargo。
+- Combinatorial Purged CV。
+- 参数扰动。
+- 分年度、分市场状态、分市值和分行业表现。
+
+禁止把普通 random 8/2 作为最终证据。
+
+
+### 7.2 最小报告指标
+
+模型指标：
+
+- AUC，如是分类。
+- RankIC。
+- ICIR。
+- top quantile precision。
+- top-bottom decile spread。
+- feature importance / SHAP。
+- best_iteration。
+
+组合指标：
+
+- 总收益。
+- CAGR。
+- 年化波动。
+- Sharpe。
+- Sortino。
+- Calmar。
+- 最大回撤。
+- 回撤持续期。
+- benchmark return。
+- excess return。
+- information ratio。
+- beta。
+- alpha。
+
+交易指标：
+
+- 单边和双边换手。
+- 成本拖累。
+- 成交失败率。
+- 涨停买不到次数。
+- 跌停卖不出次数。
+- 平均持仓数。
+- 参与率和容量。
+
+稳定性：
+
+- 分年度。
+- 分月度。
+- 牛/熊/震荡。
+- 高/低波动。
+- 高/低流动性。
+- 大盘/小盘。
+- 行业分组。
+
+### 7.3 过拟合审计
+
+当发生多策略、多参数、多模型搜索时，必须增加：
+
+- Deflated Sharpe Ratio。
+- Probability of Backtest Overfitting。
+- White Reality Check 或同类 data snooping 检验。
+- holdout 窗口复核。
+
+
+
+---
+
+## 8. 回测引擎要求
+
+### 8.1 两层回测
+
+第一层：向量化研究。
+
+- 因子 IC。
+- 分层收益。
+- Top-Bottom。
+- 换手。
+- 因子相关性。
+- 中性化前后对比。
+
+第二层：事件驱动组合回测。
+
+- 目标权重转订单。
+- T+1。
+- 交易单位。
+- 涨跌停、停牌、ST。
+- 成交失败和延迟成交。
+- 成本、滑点、冲击。
+- 现金和持仓会计。
+
+### 8.2 基准选择
+
+默认：
+
+- 全市场研究：`CN_A_ALL_EQW_PROXY`、`CN_A_ALL_MV_WEIGHTED_PROXY`。
+- 大盘策略：`CSI_000300_OFFICIAL_AKSHARE`。
+- 中盘策略：`CSI_000905_OFFICIAL_AKSHARE`。
+- 小盘策略：`CSI_000852_OFFICIAL_AKSHARE`。
+
+禁止：
+
+- 使用旧同日成交额加权 proxy。
+- 把当前指数成分倒灌为历史。
+- 改 benchmark 来制造超额收益。
+
+---
+
+## 9. 策略模块
+
+### 9.1 S1：日频多因子强基线
+
+目标：回答当前 warehouse 下是否存在真实、成本后、可交易的日频股票 alpha。
+
+数据窗口：
+
+- 主窗口：2005-01-01 至 2026-04-27。
+- 可从 2000 年开始做敏感性检查，但早期市场结构和估值覆盖需单独标注。
+
+模型顺序：
+
+1. 单因子。
+2. 等权打分。
+3. ICIR 加权。
+4. Ridge / ElasticNet。
+5. LightGBM。
+6. LightGBM Ranker。
+
+验收：
+
+- 样本外 RankIC 为正。
+- 多数年份分层单调。
+- 扣成本超额为正。
+- 换手和容量可解释。
+- 相对线性和简单打分有稳定增量。
+
+
+### 9.2 S2：交易可行性和容量压力测试
+
+目标：给所有策略建立真实可交易边界。
+
+必须覆盖：
+
+- T+1。
+- 涨跌停买卖失败。
+- 停牌和无 bar。
+- ST 和上市年龄。
+- 成交额参与率。
+- 手续费、印花税、过户费、规费、滑点、冲击。
+- 资金规模敏感性。
+
+该模块优先级和 S1 相同，因为它决定纸面 alpha 是否可执行。
+
+### 9.3 S3：市场状态与风险开关
+
+目标：降低回撤和波动，不以提高收益为唯一目标。
+
+候选变量：
+
+- 中证300/500/1000 趋势。
+- 全 A 等权和市值加权代理趋势。
+- 全市场波动率。
+- 市场宽度。
+- 涨停、跌停、炸板压力。
+- 成交额和换手。
+- 小盘相对大盘强弱。
+- Shibor、国债利率变化。
+
+输出：
+
+- 仓位 0/30/60/100。
+- 因子权重倾斜。
+- 风险熔断。
+
+### 9.4 S4：PIT 行业中性和行业轮动
+
+目标：控制行业暴露并测试行业动量/拥挤是否有价值。
+
+规则：
+
+- 只用 `pit_industry_intervals_akshare`。
+- 必须固定 `classification_standard_code`。
+- 报告行业覆盖率、缺失率和退市证券映射率。
+- 不使用 `current_industry_snapshot` 做历史回测。
+
+### 9.5 S5：qant 小盘模型重审
+
+目标：判断旧 qant 思路是否存在可救的真实增量。
+
+要求：
+
+- 使用 warehouse canonical 数据。
+- 默认 `--purge-days 10` 或与标签 horizon 对应的 purge。
+- 禁止 naive random 作为最终证据。
+- 必须复跑 split label audit。
+- 对比 corrected chronological baseline，而不是 random 高收益。
+
+优先检查：
+
+- 标签定义是否符合真实交易目标。
+- 132 特征是否经过未来信息筛选。
+- 小盘池是否过度暴露流动性和风格。
+- 成本和容量是否吞噬收益。
+- RankIC 与组合收益是否一致。
+
+### 9.6 S6：AkShare 外部低频数据
+
+目标：补齐基本面、公司行为和风险事件，提升 robust 和可解释性。
+
+接入顺序：
+
+1. 公司行为、分红、送配。
+2. 财报、业绩预告、业绩快报。
+3. 融资融券。
+4. 股东户数、质押、限售解禁。
+5. 北向资金。
+6. 龙虎榜、大宗交易。
+7. 公告、新闻和 NLP。
+
+任意接入必须先写 source registration，再写 ETL，再跑质量检查。
+
+### 9.7 S7：筹码、涨停、分钟、期权
+
+这些方向仅在对应表入仓并通过验证后进入 alpha 研究：
+
+- `chip_daily`：筹码字段、时点、异常值、供应商算法解释。
+- `limit_events`：盘后事件字段和盘中可见字段分离。
+- `prices_minute`：5min 优先，用于执行优化。
+- `option_minute`：合约、流动性、IV、Greeks、保证金、bid/ask 缺口说明。
+
+---
+
+## 10. AkShare 数据接入规范
+
+### 10.1 抓取原则
+
+- 全局 1 worker 起步。
+- 慢接口串行，间隔 5-10 秒。
+- 交易所日频接口整体不超过约 0.3 req/s。
+- 失败指数退避重试 2-3 次。
+- 中文参数使用 UTF-8 脚本或 Unicode escape。
+- 每个源先 smoke test，再小窗口，再全量。
+
+### 10.2 目标 schema
+
+| 表 | 主键和核心字段 |
+|---|---|
+| `corporate_actions/dividend_allotment_events` | `asset_id, report_period, plan_announcement_date, registration_date, ex_right_dividend_date, cash_dividend, bonus_share, transfer_share, progress, available_at` |
+| `financial_disclosures/earnings_quarterly` | `asset_id, report_period, announcement_date, eps, revenue, revenue_yoy, net_profit, net_profit_yoy, roe, gross_margin, available_at` |
+| `margin_trading/equity_margin_detail_daily` | `asset_id, exchange, trade_date, margin_buy, margin_repay, margin_balance, short_sell_volume, short_balance_qty, short_balance_amount, available_at` |
+| `shareholder_structure/shareholder_households_quarterly` | `asset_id, stat_date, holders, holders_prev, holders_change_pct, avg_holding_qty, avg_holding_mv, announcement_date, available_at` |
+| `risk_pressure/pledge_ratio_snapshot` | `asset_id, trade_date, pledge_ratio, pledged_shares, pledge_mv, pledge_count, available_at` |
+| `event_supply/restricted_release_events` | `asset_id, release_date, release_shares, release_mv, holder_type, announcement_date, available_at` |
+
+### 10.3 外部数据质量检查
+
+必须检查：
+
+- 主键唯一。
+- `asset_id` 映射率。
+- 非 A 股资产过滤。
+- 公告日、统计日、可得日关系合理。
+- 披露类特征至少 T+1 生效。
+- 数值单位统一。
+- 非负约束。
+- 极端值。
+- 覆盖率。
+- 字段漂移。
+- source URL 或 source name。
+
+禁止使用“最新价”“当前排名”“当前状态”等快照字段回填历史。
+
+---
+
+## 11. 实验台账
+
+所有实验记录到 `D:\quantum_a0\autoresearch_results.tsv` 或其扩展版。建议字段：
+
+```tsv
+run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mode	purge_days	validation_purge_days	embargo_days	validation_block_days	command	primary_metric	guardrails	total_return	CAGR	Sharpe	max_drawdown	excess	turnover	cost_drag	best_iteration_mean	rank_ic_mean	leak_audit_status	status	decision	notes
+```
+
+### 11.1 Keep 规则
+
+只有同时满足以下条件才可 keep：
+
+- 通过 leakage audit。
+- 相对 corrected baseline 改善主指标。
+- 回撤、换手、成本、容量不明显恶化。
+- 年度表现不过度集中。
+- 模型排序指标方向一致。
+- 不依赖改变 benchmark、费用、股票池或窗口取胜。
+- 实现复杂度与收益改善匹配。
+
+### 11.2 Discard 规则
+
+直接 discard 或标记 inconclusive：
+
+- 依赖 naive random uplift。
+- purge/embargo 后失效。
+- 标签跨 OOT 月。
+- 只在弱基准短窗口有轻微相对收益但绝对收益为负。
+- best_iteration 异常顶格且 OOS 无收益。
+- 通过改变评估规则获得改善。
+- 成本或容量敏感性不可接受。
+
+---
+
+## 12. Review 清单
+
+提交给独立专家 review 前必须逐项自查：
+
+### 12.1 数据
+
+- 是否只使用 `D:\data\warehouse` canonical 表。
+- 每个字段是否有 source、`available_at`、`decision_time`。
+- 是否运行最新 `leakage_check`。
+- 是否有重复键。
+- 是否使用未来股票池、未来行业、未来 ST 或未来停牌。
+- 是否披露外部源缺口。
+
+### 12.2 标签和验证
+
+- 标签 horizon 是否明确。
+- purge 天数是否不小于 label horizon。
+- OOT 边界是否无跨月/跨期 label。
+- 是否使用 chronological walk-forward。
+- 若有 random，是否 blocked + purge + embargo。
+- 是否有真正 holdout 或分年度稳定性。
+
+### 12.3 回测
+
+- 成交价是否来自未复权可成交价。
+- 收益、动量、标签是否使用 PIT 复权收益。
+- T+1、涨跌停、停牌、ST、上市年龄、交易单位是否处理。
+- 成本、滑点、冲击和容量是否进入。
+- 是否报告成交失败和成本拖累。
+
+### 12.4 模型
+
+- 是否先比较简单基线。
+- 特征重要性是否集中在可疑字段。
+- 参数扰动是否稳定。
+- 是否存在调参后只展示最好窗口。
+- 是否记录随机种子、命令、输出路径。
+
+### 12.5 结果解释
+
+- 是否同时报告模型指标和组合指标。
+- 是否报告分年度、分市场状态。
+- 是否避免承诺未经验证的收益。
+- 是否明确 qant random 8/2 只是验证污染反例。
+
+---
+
+## 13. 近期执行顺序
+
+### Step 1：构建日频研究面板 v1
+
+输入：
+
+- `universe_daily`
+- `prices_daily_returns`
+- `valuation_daily`
+- `tradability_daily_enriched`
+- `benchmarks`
+- `reference_rates`
+- `trading_costs`
+- PIT 行业表
+
+输出：
+
+- `features` 表或实验缓存。
+- 字段覆盖率报告。
+- 缺失和异常值报告。
+
+### Step 2：单因子和分层验证
+
+输出：
+
+- IC / RankIC / ICIR。
+- Top-Bottom。
+- 分年度稳定性。
+- 因子相关性。
+- 中性化前后对比。
+
+### Step 3：保守组合基线
+
+输出：
+
+- 等权、ICIR、线性、LightGBM/Ranker 对照。
+- 成本后收益。
+- 成交失败。
+- 容量。
+- 资金规模敏感性。
+
+### Step 4：风险状态和组合约束
+
+输出：
+
+- 风险开关报告。
+- 回撤改善报告。
+- 行业、市值、beta、换手约束对比。
+
+### Step 5：外部低频数据 ETL
+
+只有当 Step 1-4 证明基线稳定，且 review 同意后启动。
+
+输出：
+
+- source registration。
+- ETL 脚本。
+- schema registry 增量。
+- leakage check 增量。
+- source gap report。
+
+---
+
+## 14. 文档治理
+
+活跃文档只有两份：
+
+- `quant_strategy_plan.md`：总纲。
+- `quant_strategy_research_plan_detailed.md`：执行规范。
+
+参考文档：
+
+- `量化时间序列模型调研和选择.md`
+- `量化策略设计调研与建议.md`
+
+这些参考文档提供模型和方法论候选，但不覆盖本执行规范中的数据约束、验证约束和回测约束。
+
+每轮专家 review 后，如有采纳意见，只修改这两份活跃文档，并在 `D:\quantum_a0\task_plan.md`、`findings.md`、`progress.md` 记录裁决理由。
