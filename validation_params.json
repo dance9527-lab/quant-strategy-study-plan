@@ -1,0 +1,42 @@
+{
+  "version": "2026-04-30",
+  "scope": "official_strategy_evidence",
+  "default_walk_forward": {
+    "train_window_years": 5,
+    "rebalance_interval_trading_days": 21,
+    "min_oot_steps": 12,
+    "purge_days": 20,
+    "embargo_days": 5,
+    "holdout_required": true
+  },
+  "label_rules": {
+    "purge_days_min_rule": "max(label_horizon_trading_days, default_walk_forward.purge_days)",
+    "qant_10d_legacy_note": "Earlier qant deep-dive experiments used purge_days=10 to isolate the known 10-day label leak. New official evidence should use the stricter max(horizon,20) rule unless a narrower diagnostic run is explicitly labeled as exploratory."
+  },
+  "accepted_validation_modes": [
+    "chronological_walk_forward",
+    "purged_walk_forward",
+    "blocked_random_with_purge_embargo_for_diagnostic_only",
+    "combinatorial_purged_cv_for_sensitivity"
+  ],
+  "rejected_validation_modes": [
+    "naive_random_8_2_as_final_evidence",
+    "validation_with_oot_label_overlap",
+    "benchmark_or_cost_changes_without_baseline_rerun"
+  ],
+  "overfit_audit_required": [
+    "deflated_sharpe_ratio",
+    "probability_of_backtest_overfitting",
+    "holdout_window",
+    "parameter_perturbation",
+    "annual_and_market_regime_stability"
+  ],
+  "s1_acceptance_gate": {
+    "rank_ic_t_stat_min": 2.0,
+    "bootstrap_p_max": 0.05,
+    "annual_turnover_max": 3.0,
+    "cost_after_excess_return_positive": true,
+    "capacity_report_required": true,
+    "limit_lock_report_required": true
+  }
+}
