@@ -53,3 +53,22 @@
 
 - 提交：`0ffc11f Incorporate three-party audit feedback`。
 - 推送：`main -> origin/main` 成功。
+
+## 新会话交接压缩（2026-04-30）
+
+### 目标
+
+把当前 Git 项目状态、策略文档权威位置、三方审计裁决、验证参数和下一步实验边界压缩成最小交接，供新 session 快速恢复上下文。
+
+### 本轮范围
+
+- [x] 汇总项目当前状态。
+- [x] 新增 `session_handoff_20260430.md`。
+- [x] 在 handoff 中写入新 session 最小提示词。
+- [ ] 提交并推送到 GitHub。
+
+### 交接原则
+
+- 只保留新 session 开工所需的信息。
+- 不复制长审计历史和完整实验结果。
+- 明确 Git 仓库版本是两份策略文档的权威版本。

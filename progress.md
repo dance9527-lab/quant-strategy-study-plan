@@ -34,3 +34,8 @@
 - 已提交并推送：
   - `0ffc11f Incorporate three-party audit feedback`
   - `main -> origin/main`
+
+- 2026-04-30: 按最小必要原则生成新会话交接：
+  - 新增 `session_handoff_20260430.md`。
+  - 交接内容只保留启动顺序、当前状态、关键裁决、数据和实验边界、下一步建议和新 session 最小提示词。
+  - 明确 Git 项目版本是两份策略文档权威版本，`D:\data\strategy` 下文件只是镜像。
