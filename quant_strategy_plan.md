@@ -2,7 +2,7 @@
 
 > 本文件是后续策略研究的短总纲。详细执行规则以 `quant_strategy_research_plan_detailed.md` 为准。  
 > Canonical 数据源：`D:\data\warehouse`。旧 `processed`、旧 qant cache、旧随机验证结果只能作为历史对照或反例，不作为策略有效性证据。
-> 2026-04-30 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md` 和 `consensus_audit_r4.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计、S1 执行分层、IC 显著性修正、股票池审计、数据缺口处理和 concept shift 诊断的核心批评；不采纳未经本地验证的收益承诺。
+> 2026-04-30 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md` 和 `consensus_audit_r5.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计、S1 执行分层、IC 显著性修正、股票池审计、数据缺口处理和 concept shift 诊断的核心批评；R5 后废弃双轨、动态 alpha 和在线 Track B 作为近期执行路径，改为单轨指数衰减候选与数据驱动告警；不采纳未经本地验证的收益承诺。
 
 ---
 
@@ -58,7 +58,7 @@
 
 ### 1.4 三方审计后的独立裁决
 
-`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则，`consensus_audit_r3.md` 补充因子正交化、股票池构造审计、A 股制度风险、Newey-West 显著性修正和 IC 衰减监控，`consensus_audit_r4.md` 进一步聚焦仓库数据对接、估值缺口、真实 walk-forward 步数和 concept shift 替代训练框架；当前执行口径以两份活跃策略文档和 `validation_params.json` 吸收后的表述为准。
+`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则，`consensus_audit_r3.md` 补充因子正交化、股票池构造审计、A 股制度风险、Newey-West 显著性修正和 IC 衰减监控，`consensus_audit_r4.md` 聚焦仓库数据对接、估值缺口、真实 walk-forward 步数和 concept shift 替代训练框架，`consensus_audit_r5.md` 进一步复审双轨制可行性并将近期执行口径收敛为单轨指数衰减候选；当前执行口径以两份活跃策略文档和 `validation_params.json` 吸收后的表述为准。
 
 | 审计意见 | 裁决 | 写入方式 |
 |---|---|---|
@@ -84,7 +84,7 @@
 | P1 因子可构建性 | 采纳但保留 PIT 缺口 | 9 类 P1 因子均可由现有表构建；沪/北 ST、全历史停复牌、估值缺口和 AkShare 行业源仍需在报告中披露。 |
 | trailing ADV 和新股样本 | 采纳 | `tradability_daily_enriched.amount` 可用于 ADV；`listing_age_trading_days < 20` 标记为 ADV 不足，不得用新股异常成交额外推容量。 |
 | 早期 benchmark 可靠性 | 采纳并校正事实 | benchmark 审计必须报告 `coverage_assets`；本地全 A 等权代理 1990 年仅 1-5 只，2005 年中位约 1315 只，2024 年中位约 5342 只。2005 前只做敏感性。 |
-| Concept Shift 双轨制 | 部分采纳并降级边界 | 接受“单轨强基线 + 双轨自适应候选”的框架；不采纳把双轨制作为替代单轨基线的唯一主流程，也不采纳用当前 OOT 标签调同一步 alpha。Track B 更新只能影响下一可用 step，动态 alpha 必须由预测前已成熟信息决定。 |
+| R5 Concept Shift 训练替代方案 | 部分采纳并重构 | 采纳对双轨制、动态 alpha 和在线 Track B 的泄漏/过拟合风险批评，废弃这些近期执行路径；采纳单轨 5 年 rolling + 指数衰减 sample weight 作为预注册候选，并强制保留等权 5 年基线对照。不采纳“人工审查”，改为成熟 OOT IC/因子收益驱动的 yellow/red 状态机；任何告警不得改变当前 step 模型、alpha、阈值或特征选择。 |
 
 ---
 
@@ -117,10 +117,10 @@
 |---|---|---|---|---|
 | P0 | 实验层 PIT/label/validation audit | 策略证据输出前必须通过 | 防止 warehouse PASS 后在实验层重新引入泄漏 | 立即固化 |
 | P0 | 涨跌停和开盘执行门槛 | 任何组合回测前必须纳入 | 过滤纸面可得但真实不可成交的 alpha | 立即固化 |
-| P1 | 日频多因子强基线 | P0 audit 通过 | 证明 warehouse 下可交易超额是否存在 | 立即启动，使用 Round 4 验证参数 |
+| P1 | 日频多因子强基线 | P0 audit 通过 | 证明 warehouse 下可交易超额是否存在 | 立即启动，使用 Round 5 验证参数 |
 | P1 | 基础容量压力测试 | P0 成交规则可运行 | 用 trailing ADV、参与率、成交失败和市值分档量化真实成交边界 | 随 S1 同步输出 |
 | P1 | Concept Shift 诊断 | S1 walk-forward 同步运行 | 检测 2023-2025 结构变化、因子拥挤和分布漂移是否破坏基线稳定性 | 不直接作为收益结论 |
-| P1.5 | 双轨自适应候选 | 单轨强基线已可运行且 shift 诊断触发 | 对比 Track A 长期模型、Track B 近期模型和预注册 alpha 融合是否改善 shift 段回撤 | 作为候选，不替代单轨基线 |
+| P1.5 | R5 衰减权重稳健性 | 单轨强基线已可运行 | 对比等权 5 年、12 月半衰期指数衰减和预注册 18 月敏感性是否改善结构变化期稳定性 | 数据驱动候选，不使用 OOT/holdout 择优 |
 | P1 | 候选另类数据 ETL | source/available_at 先行 | 北向、融资融券、限售解禁只进入 candidate tracking | 不阻塞传统因子 S1 |
 | P1.5 | 风险状态和仓位开关 v1 | S1 有正向证据后 | 降低回撤和波动 | S1 通过后强制验证 |
 | P1.5 | 筹码 ETL 和 PIT 审计 | source/算法/available_at 先行 | 判断旧筹码数据能否进入 canonical warehouse | 不先作为 alpha 结论 |
@@ -151,14 +151,14 @@
 
 第一阶段目标是形成强基线，而不是调参追高收益。
 
-Concept shift 处理采用“不可替代强基线 + 自适应候选”：
+Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱动告警”：
 
-- 单轨 5 年 rolling walk-forward 仍是 S1 主基线，所有自适应方案必须与它同口径比较。
-- Track A 默认使用 5 年 rolling 稳定模型；2005 起 expanding history 只能作为敏感性，不作为默认优胜口径。
-- Track B 使用近期窗口候选（默认 252 个交易日，同时报告 126/252/504 敏感性），加强正则化并检查有效样本量。
-- 动态 `alpha` 只能由预测前已成熟的 shift score、拥挤度或分布漂移信号决定；当前 OOT 结果不得用于同一步权重选择。
-- OOT step N 的真实标签只可在标签完全成熟后更新 Track B，并且只影响下一可用 step。
-- 双轨候选只有在成本后击败单轨基线、改善 shift 段回撤或尾部风险，并通过同一套 PIT、split、holdout、DSR/PBO 和容量审计后才能 keep。
+- 单轨 5 年 rolling walk-forward 仍是 S1 主证据框架；不再使用 Track A/B、动态 alpha 或在线 Track B 作为近期候选。
+- 等权 5 年 rolling 是必须保留的对照基线，R5 指数衰减加权是单轨训练权重候选。
+- 指数衰减默认半衰期为 12 个月，公式为 `weight = 2 ** (-age_trading_days / (half_life_months * 21))`，每个训练 step 内归一化到均值 1。
+- 18 个月半衰期只作预注册敏感性；6/24/36 个月只能作为研究项，不能用 OOT 或 holdout 择优。
+- 模型默认每 63 个交易日重训一次，21 个交易日调仓/预测；两次重训之间使用最近一次符合 purge 规则的冻结模型版本。
+- Concept shift 告警只使用已成熟 OOT IC、因子收益或预测前已可得的分布/拥挤度指标；连续 6 步成熟 IC < 0 触发 red quarantine，最近 6 步中至少 4 步为负触发 yellow。告警不改变当前 step 模型、alpha、阈值、early stopping 或特征选择。
 
 ### 4.2 第二阶段模型
 
@@ -211,10 +211,12 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 
 三方独立审计（Main/Review/DeepSeek）达成以下共识，已写入执行规范：
 
-### 验证框架参数调整（Round 4 + round2/r3/r4 执行细化）
+### 验证框架参数调整（Round 5 + round2/r3/r4/r5 执行细化）
 - **embargo**：5日 → **10日**（基于A股因子自相关实证数据）
 - **purge**：max(horizon,20) → **max(horizon*3,40)**
 - **训练窗口**：**5年**（保持）
+- **训练权重**：R5 后新增单轨指数衰减候选；默认半衰期 12 个月，等权 5 年 rolling 必须作为对照，18 个月作为预注册敏感性，不得用 OOT/holdout 择优。
+- **模型重训频率**：默认 63 个交易日重训，21 个交易日调仓/预测；非重训 step 使用最近一次冻结模型。
 - **OOT steps**：最少**24步（每步21日）+ 分年度分析**（覆盖2年，40%训练/测试比）
 - **walk-forward 起始和总步数**：主窗口从 2005-01-01 开始，首个 OOT 起点约为 2010 年；24 步只是最低验收门槛，实际总步数按交易日历和最后 12 个月 holdout 剔除后计算并披露。
 - **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65** 或 bootstrap p **<0.10**、最后 12 个月 holdout Sharpe > 0、成本后超额为正、基础容量和成交失败不触发 fatal；Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险和分层通过率先作为报告要求
@@ -224,8 +226,8 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 - **尾部风险**：S1报告模板必须记录MaxDD/VaR/CVaR/Sortino/Calmar（不作为门槛，S2引入）
 - **Exploratory Tracking机制**：方向一致性≥65%（OOT 24步中IC与对应样本内IC同号的步数/24，辅助：最近6步中4步一致） + 冷却期≥6个月（从首次进入Exploratory Tracking日起算） + 不入组合 + 完整记录；冷却期满后若最近6步仍至少4步方向一致，只能重新进入 S1 候选队列，不能直接 keep。
 - **holdout定义**：最后12个月（约252个交易日）作为最终验收窗口，不参与调参、特征选择、early stopping、阈值选择或仓位开关选择；12 vs 18个月只在S2预实验中验证
-- **Concept Shift 分层**：S1 保留 5 年 rolling 单轨强基线；concept shift 诊断随 S1 报告输出；双轨自适应、在线 Track B 和动态 alpha 进入 S1.5/S3 候选，必须严格使用预测前可见或已成熟信息。
-- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md` 和 `consensus_audit_r4.md` 为准；执行前必须校验一致的参数 hash。
+- **Concept Shift 分层**：S1 保留 5 年 rolling 单轨强基线；R5 后废弃双轨自适应、在线 Track B 和动态 alpha 近期路径；concept shift 诊断随 S1 报告输出，并通过成熟 IC 驱动的 yellow/red 状态机进入 quarantine/revalidation，不放宽 hard gate。
+- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md` 和 `consensus_audit_r5.md` 为准；执行前必须校验一致的参数 hash。
 
 ### 因子库扩展
 - P1阶段同步做3-5个另类数据源的 source registration 和 candidate ETL（北向资金、融资融券、限售解禁优先）
@@ -241,7 +243,7 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 - A 股制度性风险对照：涨跌停排除 IC、注册制阶段、流动性枯竭/拥挤压力日。
 - 因子 IC 衰减半衰期：写入 S1 季度滚动 IC 报告，报告风险等级但不作为 hard gate。
 - 估值缺口处理：2026-01-05 至 2026-02-05 估值缺口只允许慢变量特征有界 forward-fill，并做缺口 mask 和敏感性报告。
-- concept shift 诊断：预注册 2023-2025 结构变化切片、Chow/断点检验、滚动 prequential loss/IC、分布漂移和拥挤度监控；诊断不放宽 S1 hard gate。
+- concept shift 诊断：预注册 2023-2025 结构变化切片、滚动成熟 IC/因子收益、分布漂移和拥挤度监控；Chow/ADWIN/Page-Hinkley/BOCPD 只可作为成熟序列上的报告项，不作为 keep gate 或自动切换依据；诊断不放宽 S1 hard gate。
 
 ### 深度模型降级
 - 放弃PatchTST/TFT，改用轻量LSTM或1D-CNN
@@ -253,17 +255,18 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 
 ### S1 启动前补充验证
 - purge 敏感性：在相同因子和窗口下对比 40/60/80 个交易日 purge；该实验不阻塞面板构建，但阻塞正式 keep/晋级结论。
-- R4 S1 前置条件：
+- R5 S1 前置条件：
   - P0：`universe_daily` 构造审计、walk-forward 日历固化、每步训练截止日满足 purge/embargo。
   - P1：valuation 缺口三口径敏感性、benchmark 覆盖审计、ADV 新股不足标记、validation 参数 hash。
-  - P1：concept shift 诊断预注册，随 S1 输出但不放宽 hard gate。
-  - 非阻塞 S1：双轨自适应候选、动态 alpha、在线 Track B，进入 S1.5/S3。
-- 24 步仅是最低验证规模和快速 smoke；完整 R4 主证据按交易日历生成全量 OOT step，需单独估算耗时。
+  - P1：concept shift 诊断和成熟 IC yellow/red 状态机预注册，随 S1 输出但不放宽 hard gate。
+  - 非阻塞 S1：ADWIN/BOCPD 等额外变点诊断、6/24/36 月半衰期研究网格；均不得进入 keep 决策。
+- 24 步仅是最低验证规模和快速 smoke；完整 R5 主证据按交易日历生成全量 OOT step，需单独估算耗时。
 
 详细共识报告见：consensus_audit_report_20260430.md
 执行层补充审计见：consensus_audit_round2.md
 第三轮执行深化见：consensus_audit_r3.md
 第四轮数据和 concept shift 审计见：consensus_audit_r4.md
+第五轮 concept shift 训练方案复审见：consensus_audit_r5.md
 
 ## 6. 禁止事项
 
@@ -279,6 +282,8 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 8. 只报告毛收益，不报告成本、换手、成交失败和容量。
 9. 在没有基线对照的情况下引入深度学习、NLP 或 RL。
 10. 在文档中承诺未经实证的高收益、Sharpe 或胜率。
+11. 把双轨 Track A/B、动态 alpha 或在线 Track B 作为 S1/S1.5 近期执行路径。
+12. 让人工主观判断决定模型切换、参数选择、候选 keep 或告警处置；所有处置必须来自预注册数据规则。
 
 ---
 
@@ -290,7 +295,7 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 
 产出：
 
-- Round 4 固化的 walk-forward 参数和本地参数 hash。
+- Round 5 固化的 walk-forward 参数、指数衰减权重参数和本地参数 hash。
 - 实验层 PIT audit、split label audit、benchmark audit。
 - `universe_daily` 构造审计报告。
 - 2026 估值缺口 mask、forward-fill 敏感性和受影响样本报告。
@@ -300,7 +305,7 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 - 单因子 IC、RankIC、ICIR。
 - Newey-West HAC IC t-stat、block bootstrap 和 10/21/40 日 block 敏感性。
 - 分层收益、制度性风险切片和 IC 衰减半衰期报告。
-- Concept shift 诊断：预注册断点/压力段、Track B shadow、expanding/full-history 对照、拥挤度指标和分布漂移监控。
+- Concept shift 诊断：预注册压力段、成熟 IC yellow/red 状态机、指数衰减 vs 等权对照、拥挤度指标和分布漂移监控。
 - 基础组合回测：等权、ICIR、正交化复合因子、线性、LightGBM/Ranker。
 - 成本、换手、成交失败、容量报告。
 
@@ -312,7 +317,7 @@ Concept shift 处理采用“不可替代强基线 + 自适应候选”：
 
 - 市场状态变量库。
 - 仓位开关对照实验。
-- S1.5 双轨自适应候选：A-only、B-only、固定 alpha、严格滞后在线 Track B 和动态 alpha 对照；必须同口径击败单轨强基线才可晋级。
+- R5 衰减权重稳健性：等权 5 年、12 月半衰期指数衰减、18 月半衰期敏感性和成熟 IC 状态机对照；必须同口径击败等权控制且通过全部审计才可晋级。
 - 风险开关 v1：S3 前使用 25/25/25/25 均匀权重占位；S3 验证后替换为数据驱动仓位比例。100/60/30/0 只保留为可选历史假设或挑战基线，不作为默认事实。
 - 熔断规则：组合回撤、市场宽度崩塌、跌停压力和流动性枯竭触发降仓。
 - 行业、市值、beta、换手、容量约束组合。
