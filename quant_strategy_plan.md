@@ -2,7 +2,7 @@
 
 > 本文件是后续策略研究的短总纲。详细执行规则以 `quant_strategy_research_plan_detailed.md` 为准。  
 > Canonical 数据源：`D:\data\warehouse`。旧 `processed`、旧 qant cache、旧随机验证结果只能作为历史对照或反例，不作为策略有效性证据。
-> 2026-04-30 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md` 和 `consensus_audit_round2.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计和 S1 执行分层的核心批评；不采纳未经本地验证的收益承诺。
+> 2026-04-30 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md` 和 `consensus_audit_r3.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计、S1 执行分层、IC 显著性修正和股票池审计的核心批评；不采纳未经本地验证的收益承诺。
 
 ---
 
@@ -58,7 +58,7 @@
 
 ### 1.4 三方审计后的独立裁决
 
-`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则；当前执行口径以两份活跃策略文档吸收后的表述为准。
+`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则，`consensus_audit_r3.md` 补充因子正交化、股票池构造审计、A 股制度风险、Newey-West 显著性修正和 IC 衰减监控；当前执行口径以两份活跃策略文档和 `validation_params.json` 吸收后的表述为准。
 
 | 审计意见 | 裁决 | 写入方式 |
 |---|---|---|
@@ -67,11 +67,18 @@
 | 因子 PIT 合规是 P0 | 采纳 | 市值/估值/行业/风险警示均需通过实验层 PIT audit；warehouse leakage PASS 不能替代因子层审计。 |
 | walk-forward 参数固化 | 采纳并升级 | 官方证据默认 5 年训练、21 个交易日调仓、`purge_days >= max(horizon*3,40)`、embargo 10、至少 24 个 OOT step，并做分年度/市场状态分析。 |
 | Deflated Sharpe 和 holdout 默认化 | 采纳 | 所有可 keep 的组合结果必须做过拟合审计和 holdout/稳定性复核。 |
-| S1 完成标准量化 | 部分采纳并分层 | `t>=1.65` 或 block bootstrap `p<0.10` 只是 S1 统计 hard gate；keep/晋级还必须通过 PIT/split/benchmark 审计、最后 12 个月 holdout、FDR、DSR/PBO、成本后超额和容量/成交约束。 |
+| S1 完成标准量化 | 部分采纳并分层 | Newey-West HAC 调整后 `t>=1.65` 或 block bootstrap `p<0.10` 只是 S1 统计 hard gate；keep/晋级还必须通过 PIT/split/benchmark 审计、最后 12 个月 holdout、FDR、DSR/PBO、成本后超额和容量/成交约束。 |
 | 分红送配从 P2 提到 P1.5 | 部分采纳 | 作为 Phase A 并行 ETL，不阻塞首轮价格/收益基线，但阻塞 total-return 和基本面增强结论。 |
 | 风险开关 v1 | 采纳但去硬编码 | 放入 S1 通过后的强制风险模块；S3 前只使用 25/25/25/25 均匀权重占位，100/60/30/0 只能作为历史假设或挑战基线，不作为默认候选。 |
 | 另类数据和筹码提前 | 部分采纳 | 北向、融资融券、限售解禁和筹码可提前做 source registration、ETL 和 candidate tracking；未通过 PIT/覆盖率/时点审计前不得进入官方 S1 keep。 |
 | DeepSeek 收益路径和 alpha 区间 | 不作为承诺采纳 | 只能作为假设队列，所有收益区间必须由本地实验重新验证。 |
+| 因子正交化流程 | 采纳但细化 | 单因子和等权基线保留原始因子；复合打分和线性模型前使用训练窗 ICIR 降序确定顺序，再做 Gram-Schmidt 正交化，并输出正交化前后相关矩阵。OOT 数据不得影响排序或处理参数。 |
+| 季节性效应处理 | 采纳方案 B | 默认依靠 5 年训练窗口覆盖完整年度周期，不在 S1 默认加入月份哑变量；月份哑变量只能作为预注册 S3 或敏感性分析。 |
+| Exploratory Tracking 冷却后处理 | 采纳 | 冷却期满后，如最近 6 个 OOT step 仍至少 4 步方向一致，可重新进入 S1 候选队列；不能直接进入 keep，且计入 `attempt_count`。 |
+| `universe_daily` 构造审计 | 采纳 | 当前默认规则来自 `can_trade_close_based`、上市交易日龄和 PIT 风险警示，但 Step 1 必须补交股票池构造审计，确认未用当前股票列表或未来状态回填历史。 |
+| A 股制度性风险对照 | 采纳为压力切片 | S1 报告增加涨跌停排除 IC 对比、注册制前后分段、流动性枯竭/拥挤压力日 IC 分析；这些切片用于诊断和风控，不得事后挑选窗口优化收益。 |
+| IC 自相关和 bootstrap block | 采纳 | IC t-stat 默认使用 Newey-West HAC 调整；block bootstrap 默认 block=`max(label_horizon, rebalance_interval)`，并在 purge 敏感性中报告 10/21/40 日 block 对 p-value 的影响。 |
+| IC 衰减半衰期 | 采纳为报告项 | S1 季度滚动 IC 报告增加半衰期，作为信号持久性风险提示，不作为 S1 hard gate。 |
 
 ---
 
@@ -129,6 +136,7 @@
 
 - 单因子和等权打分。
 - ICIR 加权打分。
+- 训练窗 ICIR 排序后的 Gram-Schmidt 正交化复合打分。
 - Ridge、ElasticNet、线性横截面回归。
 - LightGBM、XGBoost。
 - LightGBM Ranker 或 LambdaRank，用于 Top-N 排序。
@@ -186,28 +194,33 @@
 
 三方独立审计（Main/Review/DeepSeek）达成以下共识，已写入执行规范：
 
-### 验证框架参数调整（Round 4 + round2 执行细化）
+### 验证框架参数调整（Round 4 + round2/r3 执行细化）
 - **embargo**：5日 → **10日**（基于A股因子自相关实证数据）
 - **purge**：max(horizon,20) → **max(horizon*3,40)**
 - **训练窗口**：**5年**（保持）
 - **OOT steps**：最少**24步（每步21日）+ 分年度分析**（覆盖2年，40%训练/测试比）
-- **S1门槛分层**：Hard Gate 包括审计通过、IC t-stat **≥1.65** 或 bootstrap p **<0.10**、最后 12 个月 holdout Sharpe > 0、成本后超额为正、基础容量和成交失败不触发 fatal；Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险和分层通过率先作为报告要求
-- **bootstrap方法**：**Block Bootstrap, block=21日, ≥5000次重抽样**
+- **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65** 或 bootstrap p **<0.10**、最后 12 个月 holdout Sharpe > 0、成本后超额为正、基础容量和成交失败不触发 fatal；Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险和分层通过率先作为报告要求
+- **IC显著性**：IC t-stat 默认使用 **Newey-West HAC** 调整；未调整 t-stat 只能作为诊断值。
+- **bootstrap方法**：**Block Bootstrap, block=max(label_horizon, rebalance_interval)**，当前 20 日标签 + 21 日调仓默认 block=21 日，≥5000次重抽样；purge 敏感性中报告 10/21/40 日 block 对 p-value 的影响。
 - **多重检验**：候选因子>20个时，必须报告FDR校正后的显著性；进入 keep/晋级时 FDR 为硬约束
 - **尾部风险**：S1报告模板必须记录MaxDD/VaR/CVaR/Sortino/Calmar（不作为门槛，S2引入）
-- **Exploratory Tracking机制**：方向一致性≥65%（OOT 24步中IC与对应样本内IC同号的步数/24，辅助：最近6步中4步一致） + 冷却期≥6个月（从首次进入Exploratory Tracking日起算） + 不入组合 + 完整记录
+- **Exploratory Tracking机制**：方向一致性≥65%（OOT 24步中IC与对应样本内IC同号的步数/24，辅助：最近6步中4步一致） + 冷却期≥6个月（从首次进入Exploratory Tracking日起算） + 不入组合 + 完整记录；冷却期满后若最近6步仍至少4步方向一致，只能重新进入 S1 候选队列，不能直接 keep。
 - **holdout定义**：最后12个月（约252个交易日）作为最终验收窗口，不参与调参、特征选择、early stopping、阈值选择或仓位开关选择；12 vs 18个月只在S2预实验中验证
-- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md` 和 `consensus_audit_round2.md` 为准；执行前必须在本地生成或校验一致的参数 hash。
+- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md` 和 `consensus_audit_r3.md` 为准；执行前必须校验一致的参数 hash。
 
 ### 因子库扩展
 - P1阶段同步做3-5个另类数据源的 source registration 和 candidate ETL（北向资金、融资融券、限售解禁优先）
 - 筹码数据ETL从P3提前到P1/P1.5并行准备；PIT、覆盖率、算法解释和异常值审计通过前不进入官方 S1 keep
 
 ### 新增验证项
-- 因子正交化流程（ICIR加权前）
+- 因子正交化流程：单因子、等权和原始 ICIR 先保留为基线；随后在 ICIR 复合和 Ridge/ElasticNet 前，用训练窗 ICIR 降序确定 Gram-Schmidt 顺序，并输出正交化前后相关矩阵。
 - 多重检验校正（FDR，因子>20个时）
 - 尾部风险指标（VaR 95%、CVaR 99%）
 - regime断裂检测和保护：S1阶段使用20日滚动IC告警，先只作为报告/yellow标记/暂停跟踪候选；减仓或停用必须经walk-forward验证
+- `universe_daily` 构造逻辑审计：确认默认股票池不使用未来股票列表、未来 ST、未来停牌或未来涨跌停状态筛历史。
+- 季节性效应处理：默认依靠 5 年训练窗口覆盖完整年度周期；月份哑变量仅作预注册敏感性或 S3 研究。
+- A 股制度性风险对照：涨跌停排除 IC、注册制阶段、流动性枯竭/拥挤压力日。
+- 因子 IC 衰减半衰期：写入 S1 季度滚动 IC 报告，报告风险等级但不作为 hard gate。
 
 ### 深度模型降级
 - 放弃PatchTST/TFT，改用轻量LSTM或1D-CNN
@@ -223,6 +236,7 @@
 
 详细共识报告见：consensus_audit_report_20260430.md
 执行层补充审计见：consensus_audit_round2.md
+第三轮执行深化见：consensus_audit_r3.md
 
 ## 6. 禁止事项
 
@@ -251,11 +265,13 @@
 
 - Round 4 固化的 walk-forward 参数和本地参数 hash。
 - 实验层 PIT audit、split label audit、benchmark audit。
+- `universe_daily` 构造审计报告。
 - 涨跌停禁买/跌停禁卖、连续锁死、开盘冲击和成交失败报告。
 - 因子覆盖率和质量报告。
 - 单因子 IC、RankIC、ICIR。
-- 分层收益和衰减报告。
-- 基础组合回测：等权、ICIR、线性、LightGBM/Ranker。
+- Newey-West HAC IC t-stat、block bootstrap 和 10/21/40 日 block 敏感性。
+- 分层收益、制度性风险切片和 IC 衰减半衰期报告。
+- 基础组合回测：等权、ICIR、正交化复合因子、线性、LightGBM/Ranker。
 - 成本、换手、成交失败、容量报告。
 
 ### Phase B：风险状态和组合约束

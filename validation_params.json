@@ -1,9 +1,10 @@
 {
-  "version": "2026-04-30-round2",
+  "version": "2026-04-30-r3",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
-    "consensus_audit_round2.md"
+    "consensus_audit_round2.md",
+    "consensus_audit_r3.md"
   ],
   "default_walk_forward": {
     "train_window_years": 5,
@@ -21,7 +22,8 @@
   "label_rules": {
     "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.purge_days)",
     "qant_10d_legacy_note": "Earlier qant deep-dive experiments used purge_days=10 to isolate the known 10-day label leak. New official evidence must use the stricter Round 4/round2 rule max(horizon*3,40) unless a narrower diagnostic run is explicitly labeled as exploratory and excluded from keep decisions.",
-    "purge_sensitivity_days": [40, 60, 80]
+    "purge_sensitivity_days": [40, 60, 80],
+    "purge_sensitivity_bootstrap_block_days": [10, 21, 40]
   },
   "accepted_validation_modes": [
     "chronological_walk_forward",
@@ -45,9 +47,16 @@
   "s1_acceptance_gate": {
     "gate_logic": "hard_gate_all_required",
     "rank_ic_t_stat_min": 1.65,
+    "ic_t_stat_method": "newey_west_hac_adjusted",
+    "rank_ic_t_stat_uses_hac": true,
+    "newey_west_bandwidth_selection": "deterministic_rule_of_thumb",
+    "newey_west_bandwidth_rule": "lag_floor_4_times_n_over_100_power_2_over_9_min_1",
     "bootstrap_p_max": 0.1,
     "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min OR block_bootstrap_p < bootstrap_p_max",
     "block_bootstrap_days": 21,
+    "block_bootstrap_days_rule": "max(label_horizon_trading_days, default_walk_forward.rebalance_interval_trading_days)",
+    "block_bootstrap_days_default_for_20d_label": 21,
+    "block_bootstrap_sensitivity_days": [10, 21, 40],
     "bootstrap_samples_min": 5000,
     "fdr_required_if_factor_count_gt": 20,
     "holdout_window": "last_12_months",
@@ -64,6 +73,10 @@
     "recent_consistency_min": 4,
     "cooldown_months_min": 6,
     "cooldown_start": "first_entered_exploratory_tracking_date",
+    "post_cooldown_reentry_allowed": true,
+    "post_cooldown_action": "requeue_to_s1_candidate_if_recent_direction_consistency_passes",
+    "post_cooldown_recent_consistency_steps": 6,
+    "post_cooldown_recent_consistency_min": 4,
     "portfolio_allowed": false,
     "complete_record_required": true,
     "counts_toward_attempt_count": true
@@ -71,6 +84,70 @@
   "regime_alert": {
     "ic_rolling_window_days": 20,
     "alert_only_before_validation": true,
-    "position_change_requires_walk_forward_validation": true
+    "position_change_requires_walk_forward_validation": true,
+    "ic_half_life_monitoring_required": true,
+    "ic_half_life_unit": "quarters",
+    "ic_half_life_gate": false,
+    "ic_half_life_risk_bands_quarters": {
+      "high_risk_lt": 4,
+      "medium_risk_gte": 4,
+      "medium_risk_lte": 8,
+      "low_risk_gt": 8
+    }
+  },
+  "factor_processing": {
+    "orthogonalization": {
+      "enabled_for_composite_models": true,
+      "method": "gram_schmidt",
+      "input": "cross_sectional_zscore_factors_after_winsorization_and_neutralization_if_used",
+      "ordering": "descending_in_sample_icir_from_training_window_only",
+      "outputs_required": [
+        "factor_correlation_matrix_before",
+        "factor_correlation_matrix_after",
+        "orthogonalization_order",
+        "coverage_and_missingness_report"
+      ],
+      "applies_between": "after_raw_single_factor_equal_weight_and_icir_baselines_before_ridge_elasticnet_models",
+      "oot_data_must_not_influence_ordering": true
+    },
+    "seasonality_policy": {
+      "default": "five_year_training_window_covers_complete_annual_cycles",
+      "month_dummies_default": false,
+      "month_dummies_allowed_only_as": "preregistered_s3_or_sensitivity_analysis"
+    }
+  },
+  "universe_audit": {
+    "required_before_panel_keep": true,
+    "default_universe": "universe_daily.in_factor_research_universe",
+    "known_rule": "can_trade_close_based AND listing_age_trading_days >= 60 AND NOT is_risk_warning_pit",
+    "must_confirm": [
+      "no_current_stock_list_backfill_for_history",
+      "st_suspend_limit_fields_are_point_in_time_or_disclosed_as_source_gap",
+      "historical_delisted_assets_are_not_dropped",
+      "available_at_and_decision_time_are_not_after_execution_time",
+      "universe_rule_version_or_source_hash_is_recorded"
+    ]
+  },
+  "institutional_risk_checks": {
+    "limit_up_down_exclusion_ic_comparison": true,
+    "registration_reform_period_break_analysis": true,
+    "liquidity_dry_up_stress_ic_analysis": true,
+    "stress_windows_must_be_preregistered": true
+  },
+  "s1_required_diagnostics": {
+    "limit_lock_excluded_ic_comparison_required": true,
+    "registration_regime_segment_analysis_required": true,
+    "liquidity_dry_up_day_ic_analysis_required": true
+  },
+  "factor_decay_monitoring": {
+    "required_in_s1_report": true,
+    "half_life_unit": "quarter",
+    "half_life_definition": "quarters_for_rolling_ic_to_fall_from_peak_to_50_percent",
+    "risk_bands": {
+      "high_risk_lt_quarters": 4,
+      "medium_risk_quarters": [4, 8],
+      "low_risk_gt_quarters": 8
+    },
+    "gate_role": "report_only_not_s1_hard_gate"
   }
 }

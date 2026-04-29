@@ -100,7 +100,7 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 | 审计 | 最小要求 | 产物 |
 |---|---|---|
 | 因子 PIT 审计 | 检查每个特征的 `source`、`available_at`、`decision_time`、截面成员和复权生效规则 | `pit_factor_audit` 报告或等价表 |
-| 验证参数固化 | 引用 Round 4/round2 参数并记录本地参数镜像的 SHA256；机器可读镜像只在本地维护、不提交 Git；若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md` 和 `consensus_audit_round2.md` 为准 | `validation_params_hash` |
+| 验证参数固化 | 引用 Round 4/round2/r3 参数并记录 `validation_params.json` 的 SHA256；机器可读镜像随 Git 维护，但若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md` 和 `consensus_audit_r3.md` 为准 | `validation_params_hash` |
 | benchmark 审计 | 确认 benchmark 来源、可得日、覆盖区间、是否为官方或内部代理 | `benchmark_audit` 报告 |
 
 ---
@@ -110,6 +110,33 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 ### 3.1 默认股票池
 
 第一版研究默认使用 `universe_daily.in_factor_research_universe=True`。
+
+当前可确认的默认规则来自 P1 构造脚本和本地 Parquet 抽查：
+
+```text
+in_pit_lifecycle_universe = True
+in_baseline_tradeable_universe = can_trade_close_based
+in_factor_research_universe =
+    can_trade_close_based
+    AND listing_age_trading_days >= 60
+    AND NOT is_risk_warning_pit
+
+can_trade_close_based = can_buy_close_based AND can_sell_close_based
+can_buy_close_based = is_tradable AND NOT close_at_limit_up
+can_sell_close_based = is_tradable AND NOT close_at_limit_down
+is_tradable = bar_present AND price_bar_tradable_flag
+is_suspended_inferred = NOT bar_present
+```
+
+这条规则只是研究股票池过滤，不是策略信号。当前可确认它没有直接用 `in_current_stock_list` 筛选历史 factor universe；但不能据此宣称股票池 PIT 审计已完整通过。正式 S1 启动前必须完成 `universe_daily_construction_audit`：
+
+- 复核 `universe_daily` 构造脚本、字段来源、`available_at`、`decision_time` 和年度样本数。
+- 确认 ST、停牌、涨跌停、上市年龄和历史证券过滤只使用 T 日或 T-1 日可得信息。
+- 确认 `in_current_stock_list`、当前 ST 状态、当前风险警示状态或当前上市状态没有被用于回填历史筛选。
+- 确认退市、暂停上市、历史证券没有被幸存者偏差删除。
+- 输出规则版本或脚本 hash、字段来源、年度通过率、剔除原因分布、公式 mismatch 检查、`source_status` 分布和已知 source gap。
+- 明确披露未闭环缺口：沪/北历史 ST 仍缺带日期官方或授权源，全历史官方停复牌公告库仍缺；这些缺口更可能让股票池偏宽，不得被当作已验证无偏。
+- 后续应把 `universe_rule_version` 落到产物或审计报告；若 Parquet 主表暂未持久化该字段，必须记录构造脚本 hash。
 
 若自定义股票池，必须从以下字段派生：
 
@@ -256,6 +283,14 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 - 月末或调仓截面必须只包含当时已存在、已上市且通过可交易过滤的证券，不得使用未来成分、当前行业快照或当前风险警示状态。
 - 所有新因子进入组合回测前必须通过因子 PIT 审计；未通过的因子只能用于离线诊断，不能进入 keep 决策。
 
+因子正交化执行规范：
+
+- 原始因子先完成缺失处理、winsorize、横截面 z-score，以及预注册的行业/市值中性化。
+- 单因子、等权和原始 ICIR 加权必须保留为基线；正交化只作为复合因子和线性模型的预注册对照分支，不替代原始因子主证据。
+- Gram-Schmidt 顺序只能由训练窗口内的 ICIR 降序确定；OOT、holdout 或全样本信息不得参与排序、方向选择或参数估计。
+- 每个调仓截面输出 `orthogonalized_factor_panel`，并记录 `orthogonalization_order`、输入覆盖率、缺失处理规则和方向约定。
+- 必须报告正交化前后因子相关性矩阵、IC/RankIC 变化、因子方向是否保持，以及与原始 ICIR 和 Ridge/ElasticNet 的同口径比较。
+
 
 
 ### 5.2 P2 外部低频因子
@@ -292,12 +327,13 @@ AkShare 接入后再进入：
 1. 单因子。
 2. 等权打分。
 3. ICIR 加权。
-4. Ridge、ElasticNet。
-5. LightGBM / XGBoost。
-6. LightGBM Ranker / LambdaRank。
-7. CatBoost。
-8. 深度时序模型。
-9. NLP / RL。
+4. 训练窗 ICIR 排序后的 Gram-Schmidt 正交化复合因子。
+5. Ridge、ElasticNet。
+6. LightGBM / XGBoost。
+7. LightGBM Ranker / LambdaRank。
+8. CatBoost。
+9. 深度时序模型。
+10. NLP / RL。
 
 任何复杂模型必须在同一数据、同一股票池、同一成本、同一验证切分下对比强基线。
 
@@ -355,7 +391,8 @@ AkShare 接入后再进入：
 | purge | `>= max(label_horizon*3, 40)` 个交易日 |
 | embargo | 10 个交易日 |
 | 最少 OOT step | 24 |
-| bootstrap | Block Bootstrap，block=21 个交易日，至少 5000 次 |
+| IC 显著性 | 默认使用 Newey-West HAC 调整后的 IC t-stat；普通 t-stat 只能作为诊断 |
+| bootstrap | Block Bootstrap，组合收益默认 `block_days=max(label_horizon, rebalance_interval)`，至少 5000 次；keep/晋级前报告 10/21/40 日敏感性 |
 | 多重检验 | 候选因子 > 20 个时必须做 FDR 校正 |
 | holdout | 最后 12 个月（约 252 个交易日）作为最终验收窗口；不参与调参、特征选择、early stopping、阈值选择或仓位开关选择；通过条件至少为方向一致且 Sharpe > 0 |
 
@@ -382,7 +419,11 @@ AkShare 接入后再进入：
 - 任何使用未来收益标签的训练、验证、early stopping、阈值选择或调参样本，都必须先做 OOT 边界 purge。
 - random 只能作为 blocked random 诊断，且必须同时有 `validation_purge_days` 和 `embargo_days`。
 - 未报告 split label audit 的模型结果不得进入 keep、晋级或总纲结论。
-- 偏离 Round 4/round2 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 只是本地机器可读镜像，不作为 Git 活跃文档。若镜像与本文档冲突，以本文档为准并先在本地修正镜像后再执行。
+- IC 序列、重叠标签或相邻 walk-forward step 的训练窗口重叠率必须在报告中披露；重叠率按实际 `training_window_days` 和 `step_days` 计算，不使用未经核验的固定百分比。
+- Newey-West 实现必须估计 IC 序列均值的 HAC 标准误：`se_mean = sqrt(long_run_variance / n)`，`t_hac = mean(IC) / se_mean`；如果库函数已经返回均值标准误，不得再次除以 `sqrt(n)`。默认带宽使用预注册确定性规则 `lag=max(1, floor(4*(n/100)^(2/9)))`，除非实验登记在启动前明确替换为另一条确定性规则。
+- 24 个 OOT step 属于小样本，HAC t-stat 与 block bootstrap 都必须报告；keep/晋级时采用更保守的统计结论，不能在 naive、HAC 和不同 block 敏感性之间择优。
+- 组合收益 bootstrap 的 `block_days=max(label_horizon, rebalance_interval)`；纯 IC 诊断可预注册 `max(label_horizon, empirical_acf_cutoff)`，但 keep/晋级前必须报告 10/21/40 日敏感性。
+- 偏离 Round 4/round2/r3 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 是 Git 中的机器可读镜像。若镜像与本文档冲突，以本文档为准并先修正镜像后再执行。
 
 ### 7.2 最小报告指标
 
@@ -393,8 +434,8 @@ AkShare 接入后再进入：
 - ICIR。
 - top quantile precision。
 - top-bottom decile spread。
-- IC t-stat。
-- block/bootstrap p-value。
+- Newey-West HAC IC t-stat 和普通 t-stat 诊断值。
+- block/bootstrap p-value 及 `block_days` 敏感性。
 - feature importance / SHAP。
 - best_iteration。
 
@@ -438,9 +479,12 @@ AkShare 接入后再进入：
 因子衰减监控：
 
 - 每个 keep 因子必须维护季度滚动 IC/RankIC。
+- 每个 keep 因子报告 IC 衰减半衰期，定义为季度滚动 IC 从峰值下降到 50% 所需季度数。
+- 半衰期 < 4 个季度标记高风险，4-8 个季度标记中风险，> 8 个季度标记低风险。
 - 若连续 2 个季度 IC 符号反转或 t-stat 低于 1，标记为 yellow。
 - 若连续 4 个季度失效、成本后贡献为负或容量恶化，标记为 red，并进入降权/暂停候选。
 - 因子恢复必须重新通过同口径 walk-forward，而不是只看最近短期反弹。
+- 半衰期是报告要求和风险提示，不单独作为 S1 hard gate。
 
 ### 7.3 过拟合审计
 
@@ -521,9 +565,10 @@ AkShare 接入后再进入：
 1. 单因子。
 2. 等权打分。
 3. ICIR 加权。
-4. Ridge / ElasticNet。
-5. LightGBM。
-6. LightGBM Ranker。
+4. 训练窗 ICIR 排序后的 Gram-Schmidt 正交化复合因子。
+5. Ridge / ElasticNet。
+6. LightGBM。
+7. LightGBM Ranker。
 
 S1 内置最小交易可行性，不能等到 S2：
 
@@ -538,7 +583,7 @@ Hard Gate（一票否决，必须全部通过）：
 
 - 至少 24 个 walk-forward OOT step，且原则上在最后 12 个月 holdout 窗口之前完成。
 - 因子 PIT audit、split label audit、benchmark audit 通过。
-- RankIC 或核心 IC 均值为正，且 t-stat >= 1.65 或 block bootstrap p-value < 0.10（满足其一即可）。
+- RankIC 或核心 IC 均值为正，且 Newey-West HAC 调整后的 t-stat >= 1.65 或 block bootstrap p-value < 0.10（满足其一即可）；若普通 t-stat 与 HAC/block bootstrap 结论冲突，采用更保守口径。
 - holdout 为最后 12 个月，方向和主窗口一致，且 holdout Sharpe > 0。
 - 成本后超额收益为正。
 - 最低可执行容量和成交失败不触发 fatal：1000 万资金档必须可解释，涨跌停/停牌导致的成交失败率不得吞噬主要 alpha。
@@ -556,7 +601,9 @@ Soft Floor（报告并评估，不满足需说明理由）：
 - 尾部风险报告：Max Drawdown、VaR(95%)、CVaR(99%)、Sortino、Calmar。
 - 分年度、分市场状态、分市值、分行业表现。
 - 成交失败率、容量指标和各因子类别通过率。
-- Exploratory Tracking：方向一致性定义为 24 个 OOT step 中 IC 符号与对应训练窗口 IC 符号相同的窗口数量 / 24 >= 65%，且最近 6 步中至少 4 步一致；冷却期 >= 6 个月，从因子首次进入 Exploratory Tracking 的日期起算，后续 walk-forward step 不重置；不入组合，完整记录并计入 `attempt_count`/候选数口径。
+- A 股制度性风险对照：涨跌停排除 IC 对比、注册制阶段分段表现、流动性枯竭日 IC/组合收益表现。科创板注册制、创业板注册制和全面注册制等阶段必须预先定义；2024-02 等极端窗口只能作为预注册压力切片，不得事后择优。
+- 因子衰减半衰期和季度滚动 IC 风险等级。
+- Exploratory Tracking：方向一致性定义为 24 个 OOT step 中 IC 符号与对应训练窗口 IC 符号相同的窗口数量 / 24 >= 65%，且最近 6 步中至少 4 步一致；冷却期 >= 6 个月，从因子首次进入 Exploratory Tracking 的日期起算，后续 walk-forward step 不重置；不入组合，完整记录并计入 `attempt_count`/候选数口径。冷却期满后，只有新增 OOT 证据仍满足最近 6 步至少 4 步方向一致时，才可重新进入 S1 candidate；否则转为 discard 或 archive tracking。重新进入时不得重置失败历史、FDR 口径或 `attempt_count`。
 
 未通过 Hard Gate 的结果不得进入总纲收益结论，只能保留为 candidate、exploratory_track 或 discard。
 
@@ -830,6 +877,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 输出：
 
 - `features` 表或实验缓存。
+- `universe_daily_construction_audit` 报告。
 - 字段覆盖率报告。
 - 缺失和异常值报告。
 - `pit_factor_audit` 报告。
@@ -841,10 +889,12 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 输出：
 
 - IC / RankIC / ICIR。
-- IC t-stat 和 block/bootstrap p-value。
+- Newey-West HAC IC t-stat、普通 t-stat 诊断值和 block/bootstrap p-value。
+- 10/21/40 日 `block_days` 敏感性。
 - Top-Bottom。
 - 分年度稳定性。
 - 季度滚动 IC 衰减监控。
+- 涨跌停排除 IC、注册制阶段、流动性枯竭日切片。
 - 因子相关性。
 - 中性化前后对比。
 
@@ -887,11 +937,13 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 
 ### 新增验证项
 
-1. **因子正交化流程**：在ICIR加权和Ridge之间增加Gram-Schmidt正交化，产物为正交化前后因子相关性矩阵对比。
+1. **因子正交化流程**：单因子、等权和原始 ICIR 先作为基线；随后按训练窗口 ICIR 降序做 Gram-Schmidt 正交化，作为 ICIR 复合和 Ridge/ElasticNet 前的可复现对照分支，产物为正交化前后因子相关性矩阵、排序规则和覆盖率报告。
 2. **regime断裂检测**：在walk-forward每个OOT step中单独报告regime断裂期表现，增加简单regime检测（基于波动率聚类或20日滚动IC均值为负）。IC告警先只作为报告/yellow标记/暂停跟踪候选；暂停交易、降权或减仓必须经 walk-forward 验证后才能成为实际规则。实时风险开关应优先使用 ex-ante 市场宽度、波动率、跌停压力和成交额等变量。
 3. **尾部风险指标**：S1验证中增加VaR 95%、CVaR 99%、最大回撤持续期。
 4. **多重检验校正**：候选因子>20个时，必须报告FDR校正后的显著性。
-5. **季节性效应**：在因子中加入月份哑变量，或确保walk-forward训练窗口包含完整季节性周期。
+5. **季节性效应**：默认采用方案 B，即 5 年 walk-forward 训练窗口覆盖完整年度周期；S1 不默认加入月份哑变量，月份哑变量只能作为后续 S3 或敏感性分析的预注册候选。
+6. **IC 自相关调整**：IC t-stat 默认使用 Newey-West HAC 调整；相邻 walk-forward step 的训练窗口重叠率按实际窗口计算并披露，不固定写死审计报告中的估算比例。
+7. **A 股制度性风险对照**：S1 增加涨跌停排除 IC、注册制阶段和流动性枯竭日切片，所有压力窗口需预注册，不得用于事后择优。
 
 ### 因子库扩展
 
@@ -920,6 +972,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 | 有/无停牌推断的可交易universe对比 | 量化停牌推断精度 | 1小时 |
 | 不同embargo值（5/10/15）的OOT结果对比 | 确定最优embargo | 3小时 |
 | purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 8-16小时 |
+| block bootstrap block敏感性（10/21/40日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 2-4小时 |
 
 预备实验总耗时按 20-40 小时估算；该估算包括数据加载、因子计算、24 步 walk-forward 和报告生成，不应用旧 6 小时估算安排 S1。
 
