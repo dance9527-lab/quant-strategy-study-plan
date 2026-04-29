@@ -100,8 +100,16 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 | 审计 | 最小要求 | 产物 |
 |---|---|---|
 | 因子 PIT 审计 | 检查每个特征的 `source`、`available_at`、`decision_time`、截面成员和复权生效规则 | `pit_factor_audit` 报告或等价表 |
-| 验证参数固化 | 引用 Round 4/round2/r3 参数并记录 `validation_params.json` 的 SHA256；机器可读镜像随 Git 维护，但若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md` 和 `consensus_audit_r3.md` 为准 | `validation_params_hash` |
-| benchmark 审计 | 确认 benchmark 来源、可得日、覆盖区间、是否为官方或内部代理 | `benchmark_audit` 报告 |
+| 验证参数固化 | 引用 Round 4/round2/r3/r4 参数并记录 `validation_params.json` 的 SHA256；机器可读镜像随 Git 维护，但若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md` 和 `consensus_audit_r4.md` 为准 | `validation_params_hash` |
+| benchmark 审计 | 确认 benchmark 来源、可得日、覆盖区间、是否为官方或内部代理，并按时期报告 `coverage_assets` | `benchmark_audit` 报告 |
+
+数据缺口处理还必须遵守：
+
+- `valuation_daily` 在 2026-01-05 至 2026-02-05 缺失 24 个交易日，影响 holdout 附近估值类特征。只允许对市值、估值、换手率等慢变量特征按 `asset_id` 做有界 forward-fill，最长 25 个交易日，并保留 `valuation_ffill_flag` 或等价缺口 mask。
+- forward-fill 禁止用于收益、标签、成交价、成交量、成交额、执行价格或绩效会计。
+- S1 报告必须比较有/无 valuation forward-fill 的 IC、RankIC 和组合结果；若结论依赖该补值，状态只能是 `candidate` 或 `inconclusive`。
+- `tradability_daily_enriched.amount` 可作为 trailing ADV 来源；`listing_age_trading_days < 20` 的样本必须标记为 `adv_insufficient_new_listing`，不得用新股成交额异常值外推容量。
+- benchmark 审计必须披露早期覆盖股票数。当前本地证据显示 `CN_A_ALL_EQW_PROXY` 1990 年仅覆盖 1-5 只股票，2005 年中位约 1315 只，2024 年中位约 5342 只；2005 前只作为敏感性检查。
 
 ---
 
@@ -205,6 +213,14 @@ is_suspended_inferred = NOT bar_present
 - 单票集中度。
 - 换手。
 
+trailing ADV 规则：
+
+- 默认从 `tradability_daily_enriched.amount` 计算，报告 20/60/120 个交易日窗口。
+- `amount` 对有 bar 样本应完整；无 bar、停牌或 `bar_present=False` 行不得被当作真实零成交参与率，需要在报告中区分“无成交 bar 缺失”和“实际成交额为 0”。
+- 每个 ADV 窗口必须报告有效成交日数；有效日数不足窗口 80% 或上市交易日龄 < 20 的样本标记为 `adv_insufficient`。
+- 自定义股票池或事件策略即使不使用默认 factor universe，也必须执行 `adv_insufficient` 标记，避免新股或缺 bar 样本夸大容量。
+- 容量判断以 trailing ADV、参与率、成交失败和成本拖累为主，不能只看当前日成交额。
+
 分档滑点和冲击成本在 S1 报告中至少给出保守版本，在 S2 中深化：
 
 | 分档维度 | 最小分档 |
@@ -264,21 +280,24 @@ is_suspended_inferred = NOT bar_present
 
 先用已入仓表构建以下因子：
 
-| 类别 | 示例 | 来源 |
-|---|---|---|
-| 市值 | `log_total_mv`、`log_circ_mv` | `valuation_daily` |
-| 估值 | EP、BP、SP、股息率代理 | `valuation_daily` |
-| 流动性 | 成交额均值、换手率、Amihud illiquidity | 日 K、估值 |
-| 动量 | 5/20/60/120 日 PIT 复权收益 | `prices_daily_returns` |
-| 反转 | 1/3/5 日收益 | `prices_daily_returns` |
-| 波动率 | 20/60 日波动、下行波动、振幅 | 日 K、收益 |
-| 风险 | beta、残差波动、最大回撤 | benchmark、收益 |
-| 交易约束 | 上市年龄、涨跌停、停牌、ST | `tradability_daily_enriched` |
-| 行业 | PIT 行业哑变量、行业收益、行业动量 | PIT 行业表 |
+| 类别 | 示例 | 来源 | R4 字段可构建性裁决 |
+|---|---|---|---|
+| 市值 | `log_total_mv`、`log_circ_mv` | `valuation_daily.total_mv/circ_mv` | 字段存在；2026 估值缺口需 mask/ffill 敏感性 |
+| 估值 | EP、BP、SP、股息率代理 | `valuation_daily.pe_ttm/pb/ps_ttm` 等 | 字段存在；财报披露和估值 available_at 仍需 PIT audit |
+| 流动性 | 成交额均值、换手率、Amihud illiquidity | `tradability_daily_enriched.amount`、`valuation_daily.turnover_rate`、日 K | 字段存在；ADV 需有效天数和新股不足标记 |
+| 动量 | 5/20/60/120 日 PIT 复权收益 | `prices_daily_returns.return_adjusted_pit` | 可构建；禁止全样本复权 |
+| 反转 | 1/3/5 日收益 | `prices_daily_returns.return_adjusted_pit` | 可构建；与 T+1 执行约束一起评估 |
+| 波动率 | 20/60 日波动、下行波动、振幅 | `prices_daily_returns`、未复权日 K | 可构建；窗口必须只用决策前历史 |
+| 风险 | beta、残差波动、最大回撤 | `prices_daily_returns` + `benchmarks` | 可构建；benchmark 早期覆盖和代理口径需审计 |
+| 交易约束 | 上市年龄、涨跌停、停牌、ST | `tradability_daily_enriched.listing_age_trading_days`、`close_at_limit_up/down`、`high_hit_limit_up`、`low_hit_limit_down`、`can_buy_close_based`、`can_sell_close_based`、`buy_blocked_close_based`、`sell_blocked_close_based`、`is_risk_warning_pit` | 可构建；沪/北 ST 与停复牌官方源仍有 PIT 缺口 |
+| 行业 | PIT 行业哑变量、行业收益、行业动量 | `industry_classification.pit_industry_intervals_akshare` | 可构建；依赖 AkShare 行业源和固定分类标准审计 |
+
+“可构建”只表示当前 warehouse 字段足以计算候选因子，不等于可进入 keep。每个因子仍必须通过字段覆盖率、缺失率、异常值、`available_at`、`decision_time`、PIT 来源和缺口影响审计。
 
 因子 PIT 合规要求：
 
 - 估值、市值、股本和换手因子必须使用当日 `available_at` 与 `decision_time`；估值类字段不能假设财报披露早于实际公告日。
+- 2026-01-05 至 2026-02-05 的估值缺口必须生成缺口 mask；若对慢变量估值特征做有界 forward-fill，最长 25 个交易日，并同时报告 drop-gap、no-valuation 和 ffill 三种口径的敏感性。
 - 复权收益、动量和标签必须使用 `return_adjusted_pit` 或等价 PIT 调整收益；复权信息默认 T 日盘后可见、T+1 生效。
 - 月末或调仓截面必须只包含当时已存在、已上市且通过可交易过滤的证券，不得使用未来成分、当前行业快照或当前风险警示状态。
 - 所有新因子进入组合回测前必须通过因子 PIT 审计；未通过的因子只能用于离线诊断，不能进入 keep 决策。
@@ -386,11 +405,13 @@ AkShare 接入后再进入：
 
 | 参数 | 默认值 |
 |---|---:|
+| 主数据起点 | 2005-01-01 |
 | 训练窗口 | 5 年 |
 | 测试/调仓窗口 | 21 个交易日 |
 | purge | `>= max(label_horizon*3, 40)` 个交易日 |
 | embargo | 10 个交易日 |
-| 最少 OOT step | 24 |
+| OOT 起点 | 由交易日历生成，必须同时满足 5 年训练窗口、`train_end <= oot_start - purge_days` 和 label maturity；通常落在 2010Q1 附近 |
+| 最少 OOT step | 24；这是最低验收门槛，不是总步数 |
 | IC 显著性 | 默认使用 Newey-West HAC 调整后的 IC t-stat；普通 t-stat 只能作为诊断 |
 | bootstrap | Block Bootstrap，组合收益默认 `block_days=max(label_horizon, rebalance_interval)`，至少 5000 次；keep/晋级前报告 10/21/40 日敏感性 |
 | 多重检验 | 候选因子 > 20 个时必须做 FDR 校正 |
@@ -400,7 +421,8 @@ AkShare 接入后再进入：
 
 - chronological walk-forward。
 - OOT 月、21 个交易日窗口或 OOT 年，必须在实验登记中预先声明。
-- 24 个 OOT step 原则上在 holdout 窗口之前完成；holdout 只用于最终验收。
+- OOT 总步数必须由实际交易日历、主数据起点、训练窗口、调仓步长和最后 12 个月 holdout 剔除后生成并披露；不得把 24 步写成总步数。
+- 24 个 OOT step 原则上在 holdout 窗口之前完成；holdout 只用于最终验收，不参与 OOT 步数计数。
 - Purged split。
 - Embargo。
 - split label audit。
@@ -411,19 +433,34 @@ AkShare 接入后再进入：
 - Combinatorial Purged CV。
 - 参数扰动。
 - 分年度、分市场状态、分市值和分行业表现。
+- Concept shift 诊断和自适应候选必须分层：
+  - S1 主证据链保持静态 5 年 rolling 单轨基线。
+  - S1 报告可输出 Track B 近期窗口 shadow 预测、expanding/full-history 对照、Chow/断点检验、分布漂移和拥挤度监控。
+  - S1.5 才评估双轨自适应候选、严格 prequential 在线更新和动态 alpha。
+  - S3 才把稳定通过验证的告警转成仓位、熔断或降权规则。
 
 禁止把普通 random 8/2 作为最终证据。
 
 硬规则：
 
 - 任何使用未来收益标签的训练、验证、early stopping、阈值选择或调参样本，都必须先做 OOT 边界 purge。
+- 所有模型训练截止日都必须满足 `train_end <= oot_start - purge_days`，并同时满足 label maturity 和 embargo；R4 示例中的 `T-21d` 不足以替代正式 purge 规则。
 - random 只能作为 blocked random 诊断，且必须同时有 `validation_purge_days` 和 `embargo_days`。
 - 未报告 split label audit 的模型结果不得进入 keep、晋级或总纲结论。
 - IC 序列、重叠标签或相邻 walk-forward step 的训练窗口重叠率必须在报告中披露；重叠率按实际 `training_window_days` 和 `step_days` 计算，不使用未经核验的固定百分比。
 - Newey-West 实现必须估计 IC 序列均值的 HAC 标准误：`se_mean = sqrt(long_run_variance / n)`，`t_hac = mean(IC) / se_mean`；如果库函数已经返回均值标准误，不得再次除以 `sqrt(n)`。默认带宽使用预注册确定性规则 `lag=max(1, floor(4*(n/100)^(2/9)))`，除非实验登记在启动前明确替换为另一条确定性规则。
 - 24 个 OOT step 属于小样本，HAC t-stat 与 block bootstrap 都必须报告；keep/晋级时采用更保守的统计结论，不能在 naive、HAC 和不同 block 敏感性之间择优。
 - 组合收益 bootstrap 的 `block_days=max(label_horizon, rebalance_interval)`；纯 IC 诊断可预注册 `max(label_horizon, empirical_acf_cutoff)`，但 keep/晋级前必须报告 10/21/40 日敏感性。
-- 偏离 Round 4/round2/r3 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 是 Git 中的机器可读镜像。若镜像与本文档冲突，以本文档为准并先修正镜像后再执行。
+- 偏离 Round 4/round2/r3/r4 参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 是 Git 中的机器可读镜像。若镜像与本文档冲突，以本文档为准并先修正镜像后再执行。
+
+Concept shift 硬规则：
+
+- “训练数据滞后评估数据”是 walk-forward 的基本原则，不是缺陷。真正风险是非平稳性、covariate shift 和 concept shift。
+- 衰减权重只能重加权决策时点之前已观测并已成熟的数据，不能引入决策时点之后才出现的标签。
+- Chow/断点检验在 IC 自相关、异方差、多断点条件下只能作为拒绝稳定性原假设的告警，不能单独“确认 concept shift”，也不能直接决定当前 OOT 的 alpha。
+- 动态 alpha、阈值、触发变量和候选网格必须在 holdout 之前预注册并冻结；holdout 和当前 OOT 结果不得参与选择。
+- Step k 的预测必须先落盘并记录 `model_version`、`train_rows_hash`、`params_hash`、`feature_cutoff` 和 `label_cutoff`；Step k 标签成熟后只可用于评分，并在满足 label maturity、purge 和 embargo 后影响 Step k+1 或更晚的在线模型。
+- 任何同一步用 OOT 标签更新模型、alpha、阈值、early stopping 或特征选择的结果，直接标记为 leakage failure。
 
 ### 7.2 最小报告指标
 
@@ -547,6 +584,14 @@ AkShare 接入后再进入：
 - 把当前指数成分倒灌为历史。
 - 改 benchmark 来制造超额收益。
 
+benchmark 审计补充要求：
+
+- 每个 benchmark 必须报告 `coverage_assets` 的年度 min/median/max。
+- `CN_A_ALL_EQW_PROXY` 和 `CN_A_ALL_MV_WEIGHTED_PROXY` 是内部代理，不等价官方可投资指数。
+- 1990-2004 早期代理覆盖不足或市场结构差异较大，只能用于敏感性和历史背景，不支撑 keep。
+- S1 主窗口从 2005-01-01 开始；即便如此，2005 年本地全 A 代理覆盖中位数约 1315，只能描述为“覆盖足以启动全市场代理研究”，不能写成 5000+。
+- `benchmarks/STATUS.md` 是目录说明文件，不应被数据加载器当作 benchmark 表；是否删除属于仓库卫生项，不阻塞 S1。
+
 ---
 
 ## 9. 策略模块
@@ -569,6 +614,19 @@ AkShare 接入后再进入：
 5. Ridge / ElasticNet。
 6. LightGBM。
 7. LightGBM Ranker。
+
+S1 启动前置条件：
+
+| 项目 | 要求 | 阻塞级别 |
+|---|---|---|
+| `universe_daily_construction_audit` | 完成公式、字段来源、PIT 输入、幸存者偏差、source gap 和脚本 hash 审计 | P0，阻塞 S1 主证据 |
+| walk-forward 日历生成 | 固化主窗口起点、首个 OOT 起点、holdout 起点、全量 OOT step 数和每步训练截止日 | P0，阻塞 S1 设计 |
+| valuation 缺口处理 | 生成缺口 mask，预注册 drop-gap/no-valuation/ffill 三口径敏感性 | P1，阻塞估值类因子 keep |
+| benchmark 覆盖审计 | 报告每个 benchmark 的年度 `coverage_assets`；2005 前只作敏感性 | P1，阻塞超额收益 keep |
+| ADV 新股不足标记 | 按 `amount` 计算 ADV 并标记有效成交日不足或上市 <20 日样本 | P1，阻塞容量结论 |
+| validation 参数 hash | `validation_params.json` 版本、来源、`block_unit` 和 R4 规则与本文档一致 | P1，阻塞正式实验登记 |
+| concept shift 诊断 | 预注册切片、检测指标和报告模板 | P1，随 S1 输出，不阻塞单轨强基线运行 |
+| 双轨自适应候选 | 预注册 Track A/B、alpha 和在线更新规则 | 不阻塞 S1；进入 S1.5/S3 |
 
 S1 内置最小交易可行性，不能等到 S2：
 
@@ -602,10 +660,39 @@ Soft Floor（报告并评估，不满足需说明理由）：
 - 分年度、分市场状态、分市值、分行业表现。
 - 成交失败率、容量指标和各因子类别通过率。
 - A 股制度性风险对照：涨跌停排除 IC 对比、注册制阶段分段表现、流动性枯竭日 IC/组合收益表现。科创板注册制、创业板注册制和全面注册制等阶段必须预先定义；2024-02 等极端窗口只能作为预注册压力切片，不得事后择优。
+- Concept shift 诊断：2023-2025 预注册结构变化切片、Chow/断点检验、滚动 prequential loss/IC、PSI/MMD 或等价分布漂移、因子拥挤度、Track B shadow 和 expanding/full-history 对照。诊断不放宽 S1 hard gate。
 - 因子衰减半衰期和季度滚动 IC 风险等级。
 - Exploratory Tracking：方向一致性定义为 24 个 OOT step 中 IC 符号与对应训练窗口 IC 符号相同的窗口数量 / 24 >= 65%，且最近 6 步中至少 4 步一致；冷却期 >= 6 个月，从因子首次进入 Exploratory Tracking 的日期起算，后续 walk-forward step 不重置；不入组合，完整记录并计入 `attempt_count`/候选数口径。冷却期满后，只有新增 OOT 证据仍满足最近 6 步至少 4 步方向一致时，才可重新进入 S1 candidate；否则转为 discard 或 archive tracking。重新进入时不得重置失败历史、FDR 口径或 `attempt_count`。
 
 未通过 Hard Gate 的结果不得进入总纲收益结论，只能保留为 candidate、exploratory_track 或 discard。
+
+
+### 9.1.5 S1.5：Concept Shift 自适应候选
+
+目标：在 S1 单轨强基线已经可复现后，评估自适应机制是否能在结构变化期降低回撤和尾部风险。S1.5 不替代 S1 主证据，也不阻塞 S1 启动。
+
+候选模型：
+
+- Single-track baseline：5 年 rolling 主基线，必须始终保留。
+- Track A：长期模型，默认同 S1 的 5 年 rolling；2005 起 expanding history 只作为敏感性。
+- Track B：近期适应模型，默认 252 个交易日窗口，同时报告 126/252/504 敏感性；必须加强正则化和有效样本量检查。
+- 固定 alpha ensemble：A-only、B-only、`alpha=0.7/0.5/0.3`，候选网格在实验启动前冻结。
+- 动态 alpha：只允许由预测前已成熟的 shift score、市场宽度、波动率、跌停压力、成交额枯竭、PSI/MMD、拥挤度等 ex-ante 或已成熟指标决定。
+- 在线 Track B：严格 prequential；Step k 标签完全成熟后加入 buffer，只能影响 Step k+1 或更晚窗口。
+
+禁止：
+
+- 用当前 OOT 或 holdout 结果选择 alpha、阈值、窗口、特征或 early stopping。
+- 用 Step k 尚未成熟的 label 更新 Step k 或 Step k+1 的模型。
+- 把 `p<0.05` 的 Chow 检验写成 concept shift 已被确认；只能写成稳定性被拒绝或触发告警。
+- 在未击败单轨成本后基线时，用“适应市场变化”的叙事 keep 双轨模型。
+
+S1.5 通过条件：
+
+- 成本后主指标相对单轨强基线改善。
+- 在预注册 shift 切片中 MaxDD、CVaR、左尾或成交失败暴露改善，且非 shift 期没有不可接受恶化。
+- 通过与 S1 相同的 PIT、split label、benchmark、holdout、DSR/PBO、FDR、容量和交易约束审计。
+- 模型版本、训练截止、标签截止、alpha 策略、参数 hash 和预测文件均可复现。
 
 
 ### 9.2 S2：交易可行性和容量压力测试
@@ -827,9 +914,11 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 - embargo 是否为 10 个交易日，且 OOT step 是否不少于 24 个。
 - OOT 边界是否无跨月/跨期 label。
 - 是否使用 chronological walk-forward。
+- 是否报告主窗口起点、首个 OOT 起点、holdout 起点、全量 OOT step 数和 24 步最低门槛的区别。
 - 若有 random，是否 blocked + purge + embargo。
 - 是否有 split label audit、真正 holdout、DSR/PBO 或等价过拟合审计。
 - holdout 是否完全未参与调参、特征选择、early stopping 或阈值选择。
+- 若有自适应训练、Track B 或动态 alpha，是否证明所有更新和 alpha 输入都在预测前已成熟，且当前 OOT/holdout 标签没有参与同一步选择。
 
 ### 12.3 回测
 
@@ -861,6 +950,16 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 
 ## 13. 近期执行顺序
 
+### Step 0：S1 启动前审计和日历固化
+
+输出：
+
+- `universe_daily_construction_audit` 报告。
+- walk-forward 日历：主窗口起点、首个 OOT 起点、holdout 起点、全量 OOT step 数、每步训练截止日和参数 hash。
+- valuation 缺口处理方案：drop-gap、no-valuation、ffill 三口径实验登记。
+- benchmark 覆盖审计：年度 `coverage_assets` 和 2005 前敏感性标记。
+- ADV 新股不足规则和 `block_unit=trading_days` 校验。
+
 ### Step 1：构建日频研究面板 v1
 
 输入：
@@ -877,11 +976,12 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 输出：
 
 - `features` 表或实验缓存。
-- `universe_daily_construction_audit` 报告。
 - 字段覆盖率报告。
 - 缺失和异常值报告。
+- valuation 缺口 mask、`ffill_age`、forward-fill 敏感性输入。
+- ADV 有效成交日数和 `adv_insufficient` 标记。
 - `pit_factor_audit` 报告。
-- Round 4 参数和本地参数镜像 hash。
+- Round 4/round2/r3/r4 参数和本地参数镜像 hash。
 - `benchmark_audit` 报告。
 
 ### Step 2：单因子和分层验证
@@ -895,6 +995,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 - 分年度稳定性。
 - 季度滚动 IC 衰减监控。
 - 涨跌停排除 IC、注册制阶段、流动性枯竭日切片。
+- Concept shift 诊断：预注册结构变化切片、Chow/断点告警、PSI/MMD 或等价分布漂移、拥挤度指标、Track B shadow 和 expanding/full-history 对照。
 - 因子相关性。
 - 中性化前后对比。
 
@@ -913,6 +1014,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 
 输出：
 
+- S1.5 自适应候选：A-only、B-only、固定 alpha、动态 alpha 和严格 prequential 在线 Track B 对照。
 - 风险开关报告。
 - 回撤改善报告。
 - S3 前 25/25/25/25 均匀权重占位和数据驱动仓位开关实验；100/60/30/0 只作为可选历史假设或挑战基线。
@@ -944,6 +1046,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 5. **季节性效应**：默认采用方案 B，即 5 年 walk-forward 训练窗口覆盖完整年度周期；S1 不默认加入月份哑变量，月份哑变量只能作为后续 S3 或敏感性分析的预注册候选。
 6. **IC 自相关调整**：IC t-stat 默认使用 Newey-West HAC 调整；相邻 walk-forward step 的训练窗口重叠率按实际窗口计算并披露，不固定写死审计报告中的估算比例。
 7. **A 股制度性风险对照**：S1 增加涨跌停排除 IC、注册制阶段和流动性枯竭日切片，所有压力窗口需预注册，不得用于事后择优。
+8. **Concept Shift 诊断和自适应候选**：S1 输出诊断和 shadow 对照，S1.5/S3 才评估双轨、自适应 alpha 和在线更新；所有更新严格滞后，当前 OOT 标签不得影响同一步预测。
 
 ### 因子库扩展
 
@@ -970,11 +1073,15 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	data_window	validation_mo
 |---------|------|---------|
 | 有/无ST过滤的因子IC对比 | 量化ST PIT缺口影响 | 2小时 |
 | 有/无停牌推断的可交易universe对比 | 量化停牌推断精度 | 1小时 |
+| valuation缺口三口径（drop/no-valuation/ffill） | 验证2026估值缺口对估值因子和holdout的影响 | 2-4小时 |
+| benchmark覆盖率分期审计 | 量化早期全A代理覆盖不足和2005主窗口合理性 | 1小时 |
+| ADV新股不足标记检查 | 确认capacity报告不被新股异常成交额污染 | 1小时 |
 | 不同embargo值（5/10/15）的OOT结果对比 | 确定最优embargo | 3小时 |
 | purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 8-16小时 |
 | block bootstrap block敏感性（10/21/40日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 2-4小时 |
+| concept shift预注册诊断 | 输出断点、分布漂移、拥挤度和Track B shadow报告；不放宽S1 hard gate | 4-8小时 |
 
-预备实验总耗时按 20-40 小时估算；该估算包括数据加载、因子计算、24 步 walk-forward 和报告生成，不应用旧 6 小时估算安排 S1。
+预备诊断的 24 步只作为最低验证规模和快速 smoke；完整 R4 主证据必须按交易日历生成全量 OOT step，单独估算耗时，不得用 24 步耗时代表最终 S1 全量运行成本。
 
 ## 14. 文档治理
 

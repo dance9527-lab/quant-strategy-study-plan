@@ -1,21 +1,32 @@
 {
-  "version": "2026-04-30-r3",
+  "version": "2026-04-30-r4",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
     "consensus_audit_round2.md",
-    "consensus_audit_r3.md"
+    "consensus_audit_r3.md",
+    "consensus_audit_r4.md"
   ],
   "default_walk_forward": {
+    "data_start_date": "2005-01-01",
+    "train_window_definition": "rolling_calendar_years_ending_at_train_end",
     "train_window_years": 5,
+    "train_window_trading_days_approx": 1260,
     "rebalance_interval_trading_days": 21,
+    "first_oot_start_rule": "computed_from_exchange_calendar_after_train_window_and_purge_requirements",
+    "first_oot_start_must_be_reported": true,
+    "expected_oot_steps_rule": "floor((last_non_holdout_trade_date - first_oot_start_trade_date + 1) / rebalance_interval_trading_days)",
+    "actual_oot_step_count_must_be_reported": true,
     "min_oot_steps": 24,
+    "min_oot_steps_role": "minimum_acceptance_gate_not_total_walk_forward_count",
     "purge_days": 40,
     "purge_multiplier": 3,
     "embargo_days": 10,
     "holdout_required": true,
     "holdout_window": "last_12_months",
     "holdout_trading_days_approx": 252,
+    "holdout_excluded_from_oot_step_count": true,
+    "train_end_rule": "prediction_start_trade_date_minus_purge_days",
     "annual_analysis_required": true,
     "market_regime_analysis_required": true
   },
@@ -53,6 +64,8 @@
     "newey_west_bandwidth_rule": "lag_floor_4_times_n_over_100_power_2_over_9_min_1",
     "bootstrap_p_max": 0.1,
     "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min OR block_bootstrap_p < bootstrap_p_max",
+    "block_unit": "trading_days",
+    "block_bootstrap_unit": "trading_days",
     "block_bootstrap_days": 21,
     "block_bootstrap_days_rule": "max(label_horizon_trading_days, default_walk_forward.rebalance_interval_trading_days)",
     "block_bootstrap_days_default_for_20d_label": 21,
@@ -66,6 +79,40 @@
     "cost_after_excess_return_positive": true,
     "capacity_report_required": true,
     "limit_lock_report_required": true
+  },
+  "data_gap_policy": {
+    "valuation_daily_2026_gap": {
+      "gap_start": "2026-01-05",
+      "gap_end": "2026-02-05",
+      "observed_missing_trading_days": 24,
+      "feature_policy": "bounded_forward_fill_by_asset_for_slow_moving_valuation_features_only",
+      "max_forward_fill_trading_days": 25,
+      "forbidden_uses": [
+        "labels",
+        "returns",
+        "execution_prices",
+        "performance_accounting"
+      ],
+      "sensitivity_required": true,
+      "report_missing_mask_required": true
+    }
+  },
+  "capacity_policy": {
+    "adv_source": "tradability_daily_enriched.amount",
+    "adv_unit": "turnover_amount",
+    "new_listing_adv_insufficient_if_listing_age_lt_trading_days": 20,
+    "adv_min_valid_bar_ratio": 0.8,
+    "bar_absent_amount_policy": "exclude_from_valid_adv_day_count_and_report_separately",
+    "adv_windows_trading_days": [20, 60, 120],
+    "amount_coverage_report_required": true
+  },
+  "benchmark_audit": {
+    "coverage_assets_report_required": true,
+    "early_proxy_warning_before_year": 2005,
+    "s1_main_window_starts": "2005-01-01",
+    "pre_2005_data_role": "sensitivity_only",
+    "known_local_coverage_note": "CN_A_ALL_EQW_PROXY coverage_assets: 1990 range 1-5; 2005 min/median/max about 1164/1315/1342; 2024 median about 5342",
+    "non_data_status_files_must_be_ignored_by_loaders": true
   },
   "exploratory_tracking": {
     "direction_consistency_min": 0.65,
@@ -133,6 +180,97 @@
     "registration_reform_period_break_analysis": true,
     "liquidity_dry_up_stress_ic_analysis": true,
     "stress_windows_must_be_preregistered": true
+  },
+  "concept_shift": {
+    "status": "required_diagnostic_and_adaptive_candidate",
+    "does_not_replace_single_track_baseline": true,
+    "shift_types": [
+      "covariate_shift",
+      "concept_shift"
+    ],
+    "detectors": {
+      "pre_registered_break_tests": [
+        "chow_on_matured_ic_or_factor_return_series"
+      ],
+      "streaming_change_monitors": [
+        "adwin_or_page_hinkley_on_matured_prequential_loss_or_ic"
+      ],
+      "covariate_shift_monitors": [
+        "feature_distribution_psi_or_mmd",
+        "market_state_distribution_shift"
+      ],
+      "crowding_monitors": [
+        "factor_return_turnover_correlation",
+        "left_tail_skew_or_cvar",
+        "factor_return_autocorrelation"
+      ]
+    },
+    "detector_inputs_must_be_matured_before_prediction": true,
+    "current_oot_labels_forbidden_for_current_step_alpha": true,
+    "pre_registered_stress_segments": [
+      "2024-05_to_2024-08",
+      "2024-09_to_2025-02",
+      "2025-03_to_latest_non_holdout"
+    ],
+    "chow_p_value_alert_threshold": 0.05,
+    "alert_role": "diagnostic_or_alpha_policy_input_not_standalone_keep_gate"
+  },
+  "adaptive_training": {
+    "framework": "single_track_baseline_plus_two_track_adaptive_candidate",
+    "single_track_baseline_required": true,
+    "adaptive_candidate_required_if_shift_alert": true,
+    "track_a": {
+      "role": "stable_long_horizon_model",
+      "default_train_window": "rolling_5_years",
+      "expanding_history_from_2005_allowed_as_sensitivity": true,
+      "train_end_rule": "prediction_start_trade_date_minus_purge_days",
+      "update_frequency": "monthly_or_quarterly_preregistered"
+    },
+    "track_b": {
+      "role": "recent_adaptation_model",
+      "candidate_train_windows_trading_days": [126, 252, 504],
+      "default_train_window_trading_days": 252,
+      "minimum_effective_cross_sectional_samples_required": true,
+      "stronger_regularization_required": true,
+      "train_end_rule": "prediction_start_trade_date_minus_purge_days"
+    },
+    "alpha_policy": {
+      "default_candidates": [0.7, 0.5, 0.3],
+      "dynamic_alpha_allowed": true,
+      "dynamic_alpha_source": "pre_registered_shift_score_available_before_prediction",
+      "holdout_tuning_forbidden": true,
+      "current_oot_result_tuning_forbidden": true,
+      "expert_weighting_allowed_as_sensitivity": true
+    },
+    "online_update": {
+      "allowed": true,
+      "updates_apply_to": "next_eligible_step_only_after_label_maturity",
+      "same_step_update_forbidden": true,
+      "model_version_and_training_cutoff_required": true
+    },
+    "promotion_gate": {
+      "must_beat_single_track_baseline_after_costs": true,
+      "must_improve_drawdown_or_tail_risk_in_shift_segments": true,
+      "must_pass_same_audits_as_s1_keep": true
+    }
+  },
+  "s1_preconditions": {
+    "blocking_before_s1_main_evidence": [
+      "universe_daily_construction_audit",
+      "walk_forward_calendar_with_actual_oot_step_count",
+      "train_cutoff_purge_embargo_validation",
+      "validation_params_hash"
+    ],
+    "blocking_before_factor_keep": [
+      "valuation_gap_sensitivity_for_valuation_features",
+      "benchmark_coverage_assets_audit",
+      "adv_insufficient_new_listing_flags"
+    ],
+    "not_blocking_s1_main_baseline": [
+      "two_track_adaptive_candidate",
+      "dynamic_alpha",
+      "online_track_b"
+    ]
   },
   "s1_required_diagnostics": {
     "limit_lock_excluded_ic_comparison_required": true,
