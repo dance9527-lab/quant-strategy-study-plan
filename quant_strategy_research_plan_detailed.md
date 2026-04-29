@@ -529,9 +529,10 @@ S1 内置最小交易可行性，不能等到 S2：
 S1 完成门槛：
 
 - 至少 12 个 walk-forward OOT step。
-- RankIC 或核心 IC 均值为正，且 t-stat > 1.5 或 bootstrap p-value < 0.10（满足其一即可）。
-- 增加"弱alpha候选"路径：IC方向一致 + 分年度正率 > 70% + 成本后不为负 → 标记为 candidate。
+- RankIC 或核心 IC 均值为正，且 t-stat > 1.65 或 bootstrap p-value < 0.10（满足其一即可）。
+- 探索性跟踪路径：IC方向一致 + 分年度正率 > 70% + 成本后不为负 → 标记为 exploratory_track（记录但不进入keep决策）。
 - 候选因子 > 20 个时，必须报告 FDR 校正后的显著性。
+- 尾部风险报告：必须记录 Max Drawdown、VaR(95%)、CVaR(99%)、Sortino、Calmar（S1报告模板，不作为通过门槛）。
 - 成本后超额收益为正。
 - 年化双边换手 < 300%，除非策略明确被标注为高换手且容量/成本仍通过。
 - holdout 不失效，方向和主窗口一致。
@@ -912,4 +913,5 @@ Git 项目中的活跃文档只有两份：
 这些参考文档提供模型和方法论候选，但不覆盖本执行规范中的数据约束、验证约束和回测约束。
 
 每轮专家 review 后，如有采纳意见，优先修改 Git 项目中的这两份活跃文档，并在本仓库 `task_plan.md`、`findings.md`、`progress.md` 记录裁决理由。`D:\data\strategy\` 下旧副本不得与 Git 项目分叉维护。
+
 
