@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30-r8-daily-selection",
+  "version": "2026-04-30-r10-s1m-main-s1d-risk-aux",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
@@ -8,7 +8,8 @@
     "consensus_audit_r4.md",
     "consensus_audit_r5.md",
     "consensus_audit_r6.md",
-    "a_share_quant_strategy_plan_audit_report.md"
+    "a_share_quant_strategy_plan_audit_report.md",
+    "consensus_audit_r10.md"
   ],
   "data_governance": {
     "warehouse_build_manifest_required": true,
@@ -81,6 +82,10 @@
     "data_start_date": "2005-01-01",
     "train_window_definition": "rolling_calendar_years_ending_at_train_end",
     "train_window_years": 5,
+    "train_window_keep_only": true,
+    "diagnostic_train_window_years": [4, 6],
+    "diagnostic_train_window_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
+    "alternate_window_selection_rule": "nested_training_only_before_oot_no_holdout_no_current_oot_feedback",
     "train_window_trading_days_approx": 1260,
     "rebalance_interval_trading_days": 21,
     "model_refit_interval_trading_days": 63,
@@ -122,7 +127,7 @@
   "track_profiles": {
     "S1-M": {
       "name": "monthly_selection_baseline",
-      "role": "parallel_p1_mainline",
+      "role": "official_p1_alpha_mainline",
       "primary_label_horizons_trading_days": [20],
       "secondary_label_horizons_trading_days": [10],
       "decision_frequency": "monthly_or_21_trading_days",
@@ -135,18 +140,52 @@
       "capacity_report_required": true
     },
     "S1-D": {
-      "name": "daily_selection_baseline",
-      "role": "parallel_p1_mainline",
+      "name": "daily_risk_auxiliary_offline",
+      "role": "exploratory_risk_auxiliary_channel",
       "primary_label_horizons_trading_days": [1, 5],
       "secondary_label_horizons_trading_days": [10, 20],
       "decision_frequency": "daily_after_close",
       "rebalance_interval_trading_days": 1,
-      "holding_period": "daily_rolling_or_preregistered_staggered_update",
+      "rebalance_interval_role": "offline_diagnostic_not_active_portfolio_rebalance",
+      "portfolio_rebalance": "none_by_default",
+      "holding_period": "offline_daily_rolling_or_preregistered_staggered_simulation_only",
       "model_refit_interval_trading_days": 63,
       "daily_prediction_does_not_mean_daily_refit": true,
       "daily_refit_allowed_only_as_preregistered_sensitivity": true,
       "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
       "uses_frozen_model_between_refits": true,
+      "portfolio_allowed": false,
+      "active_rebalance_allowed": false,
+      "active_rebalance_allowed_only_after": "pre_registered_walk_forward_validated_risk_response",
+      "risk_alert_only_before_validation": true,
+      "official_keep_allowed": false,
+      "default_outputs": [
+        "candidate_score",
+        "risk_signal",
+        "alert_state",
+        "offline_orders_audit",
+        "daily_turnover_capacity_report"
+      ],
+      "turnover_controls": {
+        "min_position_overlap_prev_day": 0.85,
+        "single_name_daily_delta_cap": 0.02,
+        "single_side_turnover_cap_daily": 0.10,
+        "turnover_controls_role": "offline_audit_and_future_upgrade_gate"
+      },
+      "dynamic_ic_turnover": {
+        "status": "phase2_report_only_or_tighten_only_until_separate_walk_forward_validation",
+        "base_one_way_turnover_cap": 0.10,
+        "formula": "0.10 * min(max(0.5, trailing_matured_ic / 0.03), 1.5)",
+        "max_effective_cap_before_validation": 0.10,
+        "allowed_effect_before_validation": "tighten_only_or_report_only",
+        "ic_input_rule": "trailing_matured_walk_forward_ic_only_after_label_maturity_with_at_least_one_step_lag",
+        "forbidden_inputs": [
+          "current_step_oot_ic",
+          "holdout_ic",
+          "unmatured_labels",
+          "same_step_label_feedback"
+        ]
+      },
       "orders_audit_required": true,
       "daily_orders_audit_required": true,
       "daily_turnover_capacity_report_required": true,
@@ -154,7 +193,10 @@
       "minute_or_auction_data_required_for_intraday_execution_claim": true
     },
     "shared_rules": {
-      "tracks_are_parallel_not_track_a_b": true,
+      "tracks_are_independent_not_track_a_b": true,
+      "s1m_is_official_alpha_mainline": true,
+      "s1d_is_risk_auxiliary_sidecar": true,
+      "s1d_oot_or_holdout_must_not_select_s1m": true,
       "same_step_label_feedback_forbidden": true,
       "cross_track_oot_or_holdout_selection_forbidden": true,
       "track_id_required_in_ledger": true,
@@ -223,6 +265,13 @@
       "limit_lock_cvar",
       "unfilled_sell_exposure"
     ]
+  },
+  "economic_reference_thresholds": {
+    "role": "soft_economic_reference_not_replacement_for_hac_bootstrap_holdout_cost_capacity_gates",
+    "s1m_rank_ic_reference_min": 0.06,
+    "s1d_live_trading_ic_reference_gt": 0.05,
+    "s1d_risk_control_ic_reference_gte": 0.02,
+    "thresholds_do_not_allow_official_keep_without_hard_gate_pass": true
   },
   "s1_soft_floor": {
     "annual_turnover_max": 3.0,
@@ -297,6 +346,24 @@
     ],
     "self_participation_rate_is_not_sufficient_capacity_evidence": true
   },
+  "trading_cost_policy": {
+    "cost_table": "trading_costs/equity_cost_history.parquet",
+    "r10_current_round_trip_cost": 0.00206,
+    "r10_current_round_trip_cost_percent": 0.206,
+    "current_cost_date": "2026-04-27",
+    "current_buy_cost": 0.00078,
+    "current_sell_cost": 0.00128,
+    "official_or_high_confidence_component": "stamp_tax",
+    "research_assumption_components": [
+      "commission",
+      "regulatory_fee",
+      "slippage",
+      "transfer_fee"
+    ],
+    "must_disclose_research_assumption_components": true,
+    "cost_sensitivity_multipliers": [1, 2, 3],
+    "cost_or_benchmark_change_requires_baseline_rerun": true
+  },
   "benchmark_audit": {
     "coverage_assets_report_required": true,
     "early_proxy_warning_before_year": 2005,
@@ -355,13 +422,16 @@
     }
   },
   "training_weighting": {
-    "status": "r5_single_track_weighting_policy",
+    "status": "r10_single_track_weighting_policy",
     "equal_weight_control_required": true,
     "default_scheme": "row_equal_decay",
     "default_half_life_months": 12,
-    "allowed_half_life_sensitivity_months": [12, 18],
+    "allowed_half_life_sensitivity_months": [12, 18, 6, 24],
+    "preregistered_keep_sensitivity_half_life_months": [18],
+    "r10_diagnostic_half_life_months": [6, 24],
     "optional_research_half_life_months": [6, 24, 36],
-    "selection_rule": "default_12m_row_equal_decay_primary_and_18m_preregistered_sensitivity; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
+    "selection_rule": "default_12m_row_equal_decay_primary; 18m_preregistered_keep_sensitivity; 6m_24m_r10_diagnostic_report_only; 36m_optional_research_grid; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
+    "r10_diagnostic_half_life_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
     "sample_weight_formula": "row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))",
     "required_weighting_schemes": [
       "equal_weight_5y_control",
