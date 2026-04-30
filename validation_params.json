@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30-r7",
+  "version": "2026-04-30-r8-daily-selection",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
@@ -7,6 +7,7 @@
     "consensus_audit_r3.md",
     "consensus_audit_r4.md",
     "consensus_audit_r5.md",
+    "consensus_audit_r6.md",
     "a_share_quant_strategy_plan_audit_report.md"
   ],
   "data_governance": {
@@ -117,6 +118,49 @@
       "holdout_flag"
     ],
     "prediction_files_must_reference_step_id_and_calendar_hash": true
+  },
+  "track_profiles": {
+    "S1-M": {
+      "name": "monthly_selection_baseline",
+      "role": "parallel_p1_mainline",
+      "primary_label_horizons_trading_days": [20],
+      "secondary_label_horizons_trading_days": [10],
+      "decision_frequency": "monthly_or_21_trading_days",
+      "rebalance_interval_trading_days": 21,
+      "holding_period": "until_next_monthly_rebalance",
+      "model_refit_interval_trading_days": 63,
+      "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
+      "uses_frozen_model_between_refits": true,
+      "orders_audit_required": true,
+      "capacity_report_required": true
+    },
+    "S1-D": {
+      "name": "daily_selection_baseline",
+      "role": "parallel_p1_mainline",
+      "primary_label_horizons_trading_days": [1, 5],
+      "secondary_label_horizons_trading_days": [10, 20],
+      "decision_frequency": "daily_after_close",
+      "rebalance_interval_trading_days": 1,
+      "holding_period": "daily_rolling_or_preregistered_staggered_update",
+      "model_refit_interval_trading_days": 63,
+      "daily_prediction_does_not_mean_daily_refit": true,
+      "daily_refit_allowed_only_as_preregistered_sensitivity": true,
+      "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
+      "uses_frozen_model_between_refits": true,
+      "orders_audit_required": true,
+      "daily_orders_audit_required": true,
+      "daily_turnover_capacity_report_required": true,
+      "cost_sensitivity_multipliers": [1, 2, 3],
+      "minute_or_auction_data_required_for_intraday_execution_claim": true
+    },
+    "shared_rules": {
+      "tracks_are_parallel_not_track_a_b": true,
+      "same_step_label_feedback_forbidden": true,
+      "cross_track_oot_or_holdout_selection_forbidden": true,
+      "track_id_required_in_ledger": true,
+      "calendar_id_required_in_ledger": true,
+      "panel_hash_required_in_ledger": true
+    }
   },
   "label_rules": {
     "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.purge_days)",
@@ -512,6 +556,7 @@
       "universe_daily_construction_audit",
       "warehouse_build_manifest_hash",
       "source_registry_hash",
+      "track_registry_v1",
       "walk_forward_calendar_with_actual_oot_step_count",
       "walk_forward_calendar_hash",
       "train_cutoff_purge_embargo_validation",
@@ -523,7 +568,9 @@
       "adv_insufficient_new_listing_flags",
       "equal_weight_control_vs_exponential_decay_report",
       "row_equal_vs_date_balanced_decay_report",
-      "holdout_access_log"
+      "holdout_access_log",
+      "daily_orders_audit_for_S1-D",
+      "daily_turnover_capacity_report_for_S1-D"
     ],
     "not_blocking_s1_main_baseline": [
       "optional_adwin_bocpd_diagnostics",
@@ -532,10 +579,18 @@
   },
   "experiment_ledger": {
     "required_fields": [
+      "track_id",
+      "label_id",
+      "calendar_id",
+      "panel_hash",
+      "execution_rule_id",
       "warehouse_build_manifest_hash",
       "walk_forward_calendar_hash",
       "source_registry_hash",
       "validation_params_hash",
+      "decision_frequency",
+      "rebalance_interval",
+      "holding_period",
       "test_family_id",
       "hypothesis_family",
       "trial_index_in_family",
