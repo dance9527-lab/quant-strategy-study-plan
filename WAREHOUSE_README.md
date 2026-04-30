@@ -4,7 +4,7 @@
 
 本目录是 `D:\data` 的 point-in-time 数据仓库。原始数据不被修改，所有派生产物都保留来源文件、可见时间和质量标记。
 
-当前策略 Git 项目将本 README、`DATA_USAGE_GUIDE.md`、`external_data_sources.csv` 和 `warehouse_build_manifest.json` 作为数据依据文档镜像。表行数、最大日期、source status 和构建脚本以 manifest 与 `audit_reports/leakage_check_report.json`、`audit_reports/p1_data_preconditions_validation.json` 为准；策略文档不得把手工复制的行数当作单一权威。
+当前策略 Git 项目将本 README、`DATA_USAGE_GUIDE.md`、`external_data_sources.csv` 和 `warehouse_build_manifest.json` 作为数据依据文档镜像。表行数、最大日期、source status 和构建脚本以根目录 `warehouse_build_manifest.json` 与 `audit_reports/leakage_check_report.json`、`audit_reports/source_status_audit_r7.json`、`audit_reports/feature_label_panel_v1_manifest.json`、`audit_reports/p1_data_preconditions_validation.json` 为准；策略文档不得把手工复制的行数当作单一权威。
 
 ## 核心目录
 
@@ -22,7 +22,8 @@
 - `processed_inventory/`：旧 `processed` 产物盘点，用于判断可复用性。
 - `schemas/`：字段登记和质量规则。
 - `configs/retention_policy.yaml`：派生产物、缓存、临时解压和告警归档策略；原始数据不删除。
-- `features/`、`labels/`：当前仍为占位目录，正式 S1 训练前必须生成可审计 feature-label panel。
+- `features/market_daily_v1`、`labels/forward_returns_v1`：R7 已生成 market-only 日频特征和 forward return 标签面板，各 15,420,654 行，正式 S1 训练前仍需 walk-forward calendar、holdout log 和实验登记。
+- `corporate_actions/`：R7 AkShare/Sina/Eastmoney 公司行为 sanity reference，不是完整官方公司行为主表。
 
 ## 使用建议
 
@@ -35,7 +36,7 @@
 7. `valuation_daily` 中的估值和股本字段默认 T 日盘后可见，不能用于 T 日开盘前决策。
 8. `valuation_daily` 中市值、股本、换手率可先作为市场可得慢变量；PE/PB/PS/TTM 等财报派生字段仍需公告日和供应商计算时点 PIT 审计。
 9. 因子研究和执行回测必须拆分 `research_observable_universe`、`entry_eligible_universe` 和 `execution_accounting_universe`；当前 `universe_daily.in_factor_research_universe` 是保守 close-based 因子 universe，不能覆盖全部风险样本研究。
-10. `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 和 `security_master.equity_master` 后续应补齐表级或字段级 `source_status`；在补齐前，策略报告必须把这些字段的 source status 取自 manifest 和 schema audit，而不是假设为已闭环。
+10. `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 和 `security_master.equity_master` 已在 R7 补齐表级或字段级 source/time/status 字段；后续重建后必须复跑 `source_status_audit_r7.json` 或等价审计。
 
 ## 2026-04-29 P1 优化补充
 
@@ -232,10 +233,37 @@
 剩余缺口和状态分层：
 
 - 单一事实源：当前 `warehouse_build_manifest.json` 已在策略 Git 项目中建立为依据文档镜像；仓库侧如果重建，应由构建脚本生成同名 manifest，并用它派生 STATUS 和目录状态，避免手工状态文件漂移。
-- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业和估值里的市值/换手等市场慢变量可用于 market-only S1 研究；仍需引用 manifest/hash 并完成实验层 PIT、label 和 benchmark audit。
-- `missing`：`features/`、`labels/` 仍只有 `STATUS.md` 占位；`prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 仍需补齐表级 `source_status`；`security_master.equity_master` 仍需补齐 `asof_date/available_at/decision_time/source_status/quality_flags`。
+- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、R7 feature/label panel 和核心 source status 字段可用于 market-only S1 研究准备；仍需引用 manifest/hash 并完成 walk-forward/holdout 实验登记。
+- `missing`：`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账和完整官方/授权公司行为主表仍未生成。
 - `blocked_by_source_gap`：沪/北历史 ST、摘帽/摘星、完整交易所官方停复牌历史、历史 PIT 指数成分/权重、独立公司行为/除权除息/分红送配主表仍缺官方、授权或可靠历史源。
 - `candidate_etl`：融资融券、北向资金、限售解禁、ETF flow、股指期货 basis/OI、市场宽度、分钟/集合竞价、财报披露、股东户数、质押、龙虎榜、大宗交易和新闻公告只登记为候选源；未入仓、未 PIT 审计前不得进入官方 S1 keep。
 - 手工状态文件：`reference_rates/STATUS.md`、`benchmarks/STATUS.md` 和 `audit_reports/warehouse_directory_status.csv` 可能滞后于 P1 更新；正式实验引用 Git 侧 manifest、leakage check 和 P1 validation，不以这些手工状态文件为单一事实源。
 - 交易所级日历当前为统一 A 股日历代理，不是三所各自官方历史日历。
 - `return_adjusted_pit` 可作为 adjusted-return proxy；在公司行为主表和 total-return audit 未完成前，不能宣称完整 total-return accounting 闭环。
+
+## R7 feature-label panel and source status update (2026-04-30)
+
+新增脚本：`D:\data\scripts\warehouse\apply_r7_feature_label_panel.py`。
+
+新增/增强产物：
+
+- `features/market_daily_v1/`：22 个年度分区，15,420,654 行，覆盖 2005-2026；包含 market-only 日频特征、trailing return/volatility/ADV、估值市场慢变量 mask/ffill、tradability/universe、benchmark 和 PIT 申万行业字段。
+- `labels/forward_returns_v1/`：22 个年度分区，15,420,654 行；包含 1/5/10/20 日 forward adjusted return、全 A 等权代理超额、rank 和 top-decile 标签。
+- `audit_reports/feature_label_panel_v1_manifest.json`：记录 feature/label parquet 文件 hash、行数和审计 hash。
+- `audit_reports/pit_feature_audit_market_daily_v1.json`：PIT feature audit PASS；财报依赖估值字段未进入 market-only 面板。
+- `audit_reports/label_audit_forward_returns_v1.json`：label audit PASS；所有成熟标签满足 label end date 晚于 feature decision time。
+- `audit_reports/source_status_audit_r7.json`：核心表 source/time/status 字段审计 PASS。
+- `schemas/valuation_field_pit_tier_registry.csv`：把 `valuation_daily` 字段拆分为 market-derived PIT candidate 和 financial-statement-dependent unverified PIT。
+- `corporate_actions/`：AkShare/Sina 历史分红摘要 5,675 行和 Eastmoney 2023 年报分红送配样本 3,859 行。
+- `audit_reports/corporate_action_adjustment_sanity_report.json`：adjusted-vs-raw sanity check；1990-2026 共 106,923 行 adjustment event-like 样本。该审计不等于完整 total-return accounting。
+- 根目录 `warehouse_build_manifest.json`：现在由 R7 脚本生成，并已同步到策略 Git 项目。
+
+验证：
+
+- `leakage_check.py --workers 6` 已扩展到 17 类目录，全部 PASS；新增覆盖 `features`、`labels` 和 `corporate_actions`。
+- `features/market_daily_v1` 与 `labels/forward_returns_v1` 行数一致。
+
+剩余阻塞：
+
+- 官方 S1 训练仍需先固化 `walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账和实验登记。
+- 完整官方或授权公司行为主表仍缺；当前只允许声明 adjusted-return proxy 和 sanity check。

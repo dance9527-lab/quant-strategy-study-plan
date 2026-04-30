@@ -10,13 +10,14 @@
 
 ### 1.1 已经可用的数据底座
 
-`D:\data\warehouse` 已完成重构、六轮修正和 P1 数据前置。数据事实以 Git 项目中的 `warehouse_build_manifest.json`、`DATA_USAGE_GUIDE.md`、`WAREHOUSE_README.md`、`external_data_sources.csv` 和最新审计报告 hash 为准；策略文档不再把手工复制行数当作单一权威。最近一次检查：
+`D:\data\warehouse` 已完成重构、六轮修正、P1 数据前置和 R7 feature-label/source-status 更新。数据事实以 Git 项目中的 `warehouse_build_manifest.json`、`DATA_USAGE_GUIDE.md`、`WAREHOUSE_README.md`、`external_data_sources.csv` 和最新审计报告 hash 为准；策略文档不再把手工复制行数当作单一权威。最近一次检查：
 
 - `D:\data\warehouse\audit_reports\leakage_check_report.json`
-- `checked_at=2026-04-29 10:38:49`
-- 15 类目录全部 PASS
-- `validation_params.json` 版本：`2026-04-30-r6`
+- `checked_at=2026-04-30 09:48:02`
+- 17 类目录全部 PASS，新增覆盖 `features`、`labels` 和 `corporate_actions`
+- `validation_params.json` 版本：`2026-04-30-r7`
 - `warehouse_build_manifest.json` 记录当前表行数、最大数据日期、source status 和必须披露缺口
+- R7 `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json`、`label_audit_forward_returns_v1.json`、`source_status_audit_r7.json` 均已生成
 
 当前可直接用于日频股票研究的核心数据层：
 
@@ -32,9 +33,10 @@
 | `industry_classification` | PIT 行业区间 53,925 行 | PIT 行业中性和行业轮动候选 |
 | `risk_warning_daily` | 8,973,264 行 | 风险警示过滤，深市历史较完整 |
 | `trading_costs` | 23 行 | 印花税、佣金、过户费、规费、滑点研究假设 |
-| `features` / `labels` | 占位目录 | 尚未形成可用入仓数据文件；S1 训练前必须先构建 feature-label panel |
+| `features/market_daily_v1` | 15,420,654 行，2005-2026 | market-only 日频特征面板；正式训练仍需 walk-forward calendar/holdout log |
+| `labels/forward_returns_v1` | 15,420,654 行，2005-2026 | 1/5/10/20 日 forward adjusted return、超额、rank/top decile 标签 |
 
-这些表足够启动第一批 market-only 日频股票研究：市值、流动性、动量、反转、波动率、beta、行业中性、因子 IC、分层收益、保守组合回测、容量压力测试和 PIT 行业研究。这里的“启动”只包括 feature-label panel 构建、审计、IC smoke 和基线准备；`features/labels` 未形成可审计入仓表或带 manifest/hash 的正式 panel 前，不得直接训练官方 S1 模型或产出 keep 结论。估值/基本面类结论必须单独过 PIT 和 total-return 审计。
+这些表足够启动第一批 market-only 日频股票研究：市值、流动性、动量、反转、波动率、beta、行业中性、因子 IC、分层收益、保守组合回测、容量压力测试和 PIT 行业研究。R7 已解除 `features/labels` 占位阻塞，但这只表示 market-only 面板可审计入仓；在 `walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账和实验登记固化前，仍不得训练官方 S1 模型或产出 keep 结论。估值/基本面类结论必须单独过 PIT 和 total-return 审计。
 
 ### 1.2 必须披露的数据缺口
 
@@ -47,7 +49,7 @@
 - `exchange_calendar` 是 SH/SZ/BJ 统一 A 股交易日历代理，不是三所官方历史差异日历。
 - 成本模型中佣金、滑点、冲击成本和部分规费仍含研究假设。
 - 公司行为、除权除息、分红送配尚未形成独立主表；`return_adjusted_pit` 当前只能声明为 adjusted-return proxy，不能宣称完整 total-return accounting 已闭环。
-- `chip_daily`、`limit_events`、`prices_minute`、`option_minute`、`features`、`labels`、`margin_trading`、`northbound`、`fund_flows`、`index_futures` 当前仍未形成可审计入仓主表。
+- `chip_daily`、`limit_events`、`prices_minute`、`option_minute`、`margin_trading`、`northbound`、`fund_flows`、`index_futures` 当前仍未形成可审计入仓主表。
 
 ### 1.3 qant 实验结论的使用方式
 
@@ -306,7 +308,7 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 14. 用行级样本数扩张造成的近期股票数偏差冒充 concept shift 适配。
 15. 只用自有参与率判断拥挤容量，不报告因子重叠、左尾、跌停未成交和市场成交额占比。
 16. 未建立 holdout access log 就反复查看 holdout 后继续声称其仍是未污染最终验收。
-17. 在 `features/labels` 未入仓或未生成可审计、带 hash 的 feature-label panel 前直接训练官方 S1 模型。
+17. 绕过 R7 可审计 `features/labels` 面板、manifest/hash、PIT audit、label audit、walk-forward calendar 或 holdout log，直接训练官方 S1 模型。
 18. 用临时实验缓存绕过 feature-label 入仓审计、PIT audit、label audit 或 manifest/hash 登记。
 19. 把 anchored post-2023 keep、same-step label feedback 或当前 OOT/holdout/stress slice 反馈作为模型选择、阈值选择或参数选择依据。
 

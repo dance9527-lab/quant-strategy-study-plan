@@ -68,7 +68,7 @@ feature_time <= available_at <= decision_time < execution_time <= label_end_time
 | `risk_warning_daily` | 8,973,264 | 1994-01-03 至 2026-04-27 | 风险警示过滤 | 深市历史较完整，沪/北不足 |
 | `trading_costs.equity_cost_history` | 23 | 1990-12-19 至 2023-08-28 | 交易成本 | 部分为研究假设 |
 
-正式报告应引用 `warehouse_build_manifest.json` 的 hash，而不是重新手工抄写上表行数。`features` 和 `labels` 当前仍是占位目录，S1 训练前必须先生成可审计 feature-label panel，并引用 manifest/hash、PIT audit、label audit 和 benchmark audit。临时实验缓存只能作为中间产物，不得直接作为官方 S1 evidence。
+正式报告应引用 `warehouse_build_manifest.json` 的 hash，而不是重新手工抄写上表行数。R7 已生成 `features/market_daily_v1` 与 `labels/forward_returns_v1`，各 15,420,654 行，并输出 `feature_label_panel_v1_manifest.json`、PIT feature audit 和 label audit；这只解除面板占位阻塞，S1 训练前仍必须引用 walk-forward calendar、holdout log、benchmark audit、validation hash 和实验登记。临时实验缓存只能作为中间产物，不得直接作为官方 S1 evidence。
 
 ### 2.2 数据缺口
 
@@ -82,8 +82,8 @@ feature_time <= available_at <= decision_time < execution_time <= label_end_time
 - 三所官方历史差异日历未独立验证。
 - 成本中的佣金、滑点、冲击成本仍是研究假设。
 - 公司行为、除权除息、分红送配尚未形成独立主表；`return_adjusted_pit` 当前只能声明为 adjusted-return proxy，不能宣称完整 total-return accounting 已闭环。
-- 筹码、涨停、分钟、期权、融资融券、北向、ETF flows、股指期货 basis/OI、`features`、`labels` 尚未形成可审计 warehouse 主表。
-- `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 仍需补齐表级 `source_status`；`security_master.equity_master` 仍需补齐 `asof_date/available_at/decision_time/source_status/quality_flags`。
+- 筹码、涨停、分钟、期权、融资融券、北向、ETF flows、股指期货 basis/OI 尚未形成可审计 warehouse 主表。
+- `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 和 `security_master.equity_master` 的必需 source/time/status 字段已由 R7 补齐；后续重建后必须复跑 `source_status_audit_r7.json` 或等价审计。
 
 ### 2.3 数据质量门槛
 
@@ -110,7 +110,7 @@ C:\Users\LeoShu\.conda\envs\ptorch\python.exe D:\data\scripts\warehouse\leakage_
 | 因子 PIT 审计 | 检查每个特征的 `source`、`available_at`、`decision_time`、截面成员和复权生效规则 | `pit_factor_audit` 报告或等价表 |
 | 验证参数固化 | 引用 Round 5/round2/r3/r4/r5 参数并记录 `validation_params.json` 的 SHA256；机器可读镜像随 Git 维护，但若镜像与本文档冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md` 和 `consensus_audit_r5.md` 为准 | `validation_params_hash` |
 | benchmark 审计 | 确认 benchmark 来源、可得日、覆盖区间、是否为官方或内部代理，并按时期报告 `coverage_assets` | `benchmark_audit` 报告 |
-| 字段级 source status | 检查核心表是否有 `source_status` 或字段 PIT tier；缺失时必须在 manifest 和报告中标记 | `source_status_audit` |
+| 字段级 source status | 检查核心表是否有 `source_status` 或字段 PIT tier；R7 当前 PASS，重建后必须复跑 | `source_status_audit_r7` |
 
 数据缺口处理还必须遵守：
 
@@ -1056,7 +1056,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	warehouse_build_manifest_
 - 三层 universe 审计：research observable、entry eligible、execution accounting。
 - walk-forward 日历：主窗口起点、首个 OOT 起点、holdout 起点、全量 OOT step 数、每步训练截止日、`step_id` 和参数 hash。
 - `holdout_access_log.tsv` 和测试族台账 schema。
-- `source_status_audit`：核心表 `source_status` 缺失字段、估值字段 PIT tier 和可用性分层。
+- `source_status_audit_r7`：R7 已补齐核心表 `source_status`、估值字段 PIT tier 和 `security_master` 时点字段；后续重建后复跑。
 - valuation 缺口处理方案：drop-gap、no-valuation、ffill 三口径实验登记。
 - 公司行为/复权审计登记：没有独立公司行为表前，S1 只声明 adjusted-return proxy。
 - benchmark 覆盖审计：年度 `coverage_assets` 和 2005 前敏感性标记。
@@ -1064,6 +1064,8 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	warehouse_build_manifest_
 - R5/CSRP 指数衰减权重登记：等权对照、row-equal/date-balanced、12/18 月半衰期、63 日重训锚点、成熟 IC 状态机、结构性 regime map、拥挤容量和参数 hash。
 
 ### Step 1：构建日频研究面板 v1
+
+R7 当前状态：`features/market_daily_v1` 与 `labels/forward_returns_v1` 已入仓，各 15,420,654 行，覆盖 2005-2026；`feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json` 和 `label_audit_forward_returns_v1.json` 已生成并 PASS。后续 Step 1 的重点从“从零生成面板”转为复核面板 hash、补 walk-forward calendar 绑定、补 benchmark audit 和正式实验登记。
 
 输入：
 
@@ -1078,7 +1080,7 @@ run_id	hypothesis	baseline_run_id	commit	changed_files	warehouse_build_manifest_
 
 输出：
 
-- `features/labels` 入仓表，或已登记、可复现、带 hash 的 feature-label panel；实验缓存仅作中间产物，不能直接训练官方 S1。
+- `features/labels` 入仓表 hash 复核；实验缓存仅作中间产物，不能直接训练官方 S1。
 - 字段覆盖率报告。
 - 缺失和异常值报告。
 - valuation 缺口 mask、`ffill_age`、forward-fill 敏感性输入。

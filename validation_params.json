@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30-r6",
+  "version": "2026-04-30-r7",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
@@ -34,7 +34,17 @@
     "source_registry_statuses_are_secondary_to_availability_bucket": true,
     "strategy_docs_must_reference_manifest_not_manual_row_counts": true,
     "features_and_labels_must_be_built_before_training": true,
+    "features_and_labels_current_status": "built_r7_market_daily_v1_and_forward_returns_v1",
+    "feature_panel_artifact": "features/market_daily_v1",
+    "label_panel_artifact": "labels/forward_returns_v1",
+    "feature_label_panel_rows": 15420654,
+    "feature_label_panel_manifest_file": "audit_reports/feature_label_panel_v1_manifest.json",
+    "pit_feature_audit_file": "audit_reports/pit_feature_audit_market_daily_v1.json",
+    "label_audit_file": "audit_reports/label_audit_forward_returns_v1.json",
     "source_status_field_audit_required": true,
+    "source_status_field_audit_status": "r7_required_columns_present",
+    "source_status_audit_file": "audit_reports/source_status_audit_r7.json",
+    "corporate_action_sanity_file": "audit_reports/corporate_action_adjustment_sanity_report.json",
     "experiment_status_enum": [
       "candidate",
       "inconclusive",
