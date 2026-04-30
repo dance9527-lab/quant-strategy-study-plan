@@ -1,5 +1,7 @@
 ﻿# A股量化策略实验设计规划更新版独立审计报告
 
+> R12 复核说明：本报告是 2026-04-30 更新版审计输入快照。R11/R12 已按本报告修订策略文档、参数和 source registry，因此报告中关于“source registry 仍为 29 行/6 列、缺少 GMSL”等状态性描述已被后续文档和 `external_data_sources.csv`、`validation_params.json`、`warehouse_build_manifest.json` 的当前版本取代。审计建议本身仍保留为历史依据，不作为当前 warehouse 可用状态的单一事实源。
+
 **审计日期**：2026-04-30
 **审计对象**：`quant_strategy_plan.md`、`quant_strategy_research_plan_detailed.md` 及其数据依据文件
 **重点问题**：concept shift 机制、俄乌/美伊等长期地缘冲击、月频与日频调仓路线、数据可落地性

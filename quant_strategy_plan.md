@@ -2,7 +2,7 @@
 
 > 本文件是后续策略研究的短总纲。详细执行规则以 `quant_strategy_research_plan_detailed.md` 为准。  
 > Canonical 数据源：`D:\data\warehouse`。旧 `processed`、旧 qant cache、旧随机验证结果只能作为历史对照或反例，不作为策略有效性证据。
-> 2026-04-30 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md`、`consensus_audit_r5.md`、`consensus_audit_r6.md`、`a_share_quant_strategy_plan_audit_report.md`、`consensus_audit_r10.md` 和 `a_share_quant_strategy_plan_updated_audit_report_20260430.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计、S1 执行分层、IC 显著性修正、股票池审计、数据缺口处理、manifest 治理、三层 universe、拥挤容量、concept shift resilience、GMSL 外生冲击层和日频风险/执行治理的核心批评；R11 后第一阶段采用“月频 alpha 主线 + 日频风险/执行主线”的双主线治理，但只有 `S1-M` 是近期正式 alpha keep 主线，`S1-D/S1-R` 不进入近期主动 alpha 调仓或 official keep；R5 后仍废弃双轨、动态 alpha 和在线 Track B 作为近期执行路径，保留单轨 5 年 rolling、预注册权重候选、结构性稳健性审计、GMSL stress audit 与数据驱动告警；不采纳未经本地验证的收益承诺。
+> 2026-04-30/2026-05-01 已吸收 `三方审计报告_20260430.md`、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md`、`consensus_audit_r5.md`、`consensus_audit_r6.md`、`a_share_quant_strategy_plan_audit_report.md`、`consensus_audit_r10.md`、`a_share_quant_strategy_plan_updated_audit_report_20260430.md` 和 `consensus_audit_r11.md`：采纳其对执行可成交性、因子 PIT、walk-forward 固化、过拟合审计、S1 执行分层、IC 显著性修正、股票池审计、数据缺口处理、manifest 治理、三层 universe、拥挤容量、concept shift resilience、GMSL 外生冲击层和日频风险/执行治理的核心批评；R11 后第一阶段采用“月频 alpha 主线 + 日频风险/执行主线”的双主线治理，但只有 `S1-M` 是近期正式 alpha keep 主线，`S1-D/S1-R` 不进入近期主动 alpha 调仓或 official keep；R5 后仍废弃双轨、动态 alpha 和在线 Track B 作为近期执行路径，保留单轨 5 年 rolling、预注册权重候选、结构性稳健性审计、GMSL stress audit 与数据驱动告警；不采纳未经本地验证的收益承诺。
 
 ---
 
@@ -15,7 +15,7 @@
 - `D:\data\warehouse\audit_reports\leakage_check_report.json`
 - `checked_at=2026-04-30 09:48:02`
 - 21 类目录全部 PASS，新增覆盖 `features`、`labels`、`corporate_actions`、`global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar`
-- `validation_params.json` 版本：`2026-04-30-r11-gmsl-s1r-risk-execution`
+- `validation_params.json` 版本：`2026-05-01-r13-consensus-r11-hardening`
 - `warehouse_build_manifest.json` 记录当前表行数、最大数据日期、source status 和必须披露缺口
 - R7 `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json`、`label_audit_forward_returns_v1.json`、`source_status_audit_r7.json` 均已生成
 
@@ -66,7 +66,7 @@
 
 ### 1.4 三方审计后的独立裁决
 
-`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则，`consensus_audit_r3.md` 补充因子正交化、股票池构造审计、A 股制度风险、Newey-West 显著性修正和 IC 衰减监控，`consensus_audit_r4.md` 聚焦仓库数据对接、估值缺口、真实 walk-forward 步数和 concept shift 替代训练框架，`consensus_audit_r5.md` 进一步复审双轨制可行性并将近期执行口径收敛为单轨指数衰减候选。`a_share_quant_strategy_plan_audit_report.md` 要求先修复数据 manifest、source registry、三层 universe、date-balanced 权重、拥挤容量、holdout 访问治理和测试族台账；`consensus_audit_r10.md` 进一步把 `S1-M` 固定为近期正式主线，把 `S1-D` 降级为探索/风控辅助通道，并补充成本、日换手、半衰期和训练窗口敏感性建议；`a_share_quant_strategy_plan_updated_audit_report_20260430.md` 将 `S1-D` 重构为正式日频风险/执行主线而非 alpha 主线，并新增 GMSL 外生冲击层、execution-aligned PnL 审计、日频 252/504 成熟日门槛和 computed purge 规则。当前执行口径以两份活跃策略文档和 `validation_params.json` 吸收后的表述为准。
+`三方审计报告_20260430.md` 给早期计划的共识评分为 `6.0-6.5/10`。随后 `consensus_audit_report_20260430.md` 完成 Round 4 参数对齐，`consensus_audit_round2.md` 进一步细化执行层规则，`consensus_audit_r3.md` 补充因子正交化、股票池构造审计、A 股制度风险、Newey-West 显著性修正和 IC 衰减监控，`consensus_audit_r4.md` 聚焦仓库数据对接、估值缺口、真实 walk-forward 步数和 concept shift 替代训练框架，`consensus_audit_r5.md` 进一步复审双轨制可行性并将近期执行口径收敛为单轨指数衰减候选。`a_share_quant_strategy_plan_audit_report.md` 要求先修复数据 manifest、source registry、三层 universe、date-balanced 权重、拥挤容量、holdout 访问治理和测试族台账；`consensus_audit_r10.md` 进一步把 `S1-M` 固定为近期正式主线，把 `S1-D` 降级为探索/风控辅助通道，并补充成本、日换手、半衰期和训练窗口敏感性建议；`a_share_quant_strategy_plan_updated_audit_report_20260430.md` 将 `S1-D` 重构为正式日频风险/执行主线而非 alpha 主线，并新增 GMSL 外生冲击层、execution-aligned PnL 审计、日频 252/504 成熟日门槛和 computed purge 规则。`consensus_audit_r11.md` 进一步要求把 FDR、burned holdout、冻结模型版本、CSRP 误报率和 GMSL 降级写成可验收规则。当前执行口径以两份活跃策略文档和 `validation_params.json` 吸收后的表述为准。
 
 | 审计意见 | 裁决 | 写入方式 |
 |---|---|---|
@@ -75,7 +75,7 @@
 | 因子 PIT 合规是 P0 | 采纳 | 市值/估值/行业/风险警示均需通过实验层 PIT audit；warehouse leakage PASS 不能替代因子层审计。 |
 | walk-forward 参数固化 | 采纳并升级 | 官方证据默认 5 年训练；S1-M 默认固定月末/月初调仓，21 个交易日滚动为敏感性；`computed_purge_days=max(label_horizon*3,40)`，因此 20 日标签默认 purge 60 个交易日；embargo 10、至少 24 个 OOT step，并做分年度/市场状态分析。 |
 | Deflated Sharpe 和 holdout 默认化 | 采纳 | 所有可 keep 的组合结果必须做过拟合审计和 holdout/稳定性复核。 |
-| S1 完成标准量化 | 部分采纳并分层 | Newey-West HAC 调整后 `t>=1.65` 或 block bootstrap `p<0.10` 只是 S1 统计 hard gate；keep/晋级还必须通过 PIT/split/benchmark 审计、最后 12 个月 holdout、FDR、DSR/PBO、成本后超额和容量/成交约束。 |
+| S1 完成标准量化 | 部分采纳并分层 | Newey-West HAC 调整后 `t>=1.65` 与 block bootstrap `p<0.10` 都必须报告；若只有一项通过，状态为 `inconclusive`，不能 keep。keep/晋级还必须通过 PIT/split/benchmark 审计、最后 12 个月 holdout、FDR、DSR/PBO、成本后超额和容量/成交约束。 |
 | 分红送配从 P2 提到 P1.5 | 部分采纳 | 作为 Phase A 并行 ETL，不阻塞首轮价格/收益基线，但阻塞 total-return 和基本面增强结论。 |
 | 风险开关 v1 | 采纳但去硬编码 | 放入 S1 通过后的强制风险模块；S3 前只使用 25/25/25/25 均匀权重占位，100/60/30/0 只能作为历史假设或挑战基线，不作为默认候选。 |
 | 另类数据和筹码提前 | 部分采纳 | 北向、融资融券、限售解禁和筹码可提前做 source registration、ETL 和 candidate tracking；未通过 PIT/覆盖率/时点审计前不得进入官方 S1 keep。 |
@@ -100,8 +100,9 @@
 | Date-balanced decay | 部分采纳 | 作为 5 年单轨内的必报对照，防止近期股票数扩张造成隐性双重加权；不得用 OOT/holdout 在 row-equal 与 date-balanced 间择优。 |
 | CSRP 与拥挤容量 | 部分采纳 | 作为生产前结构性稳健性和容量审计层，不放宽 S1 hard gate，不恢复双轨/动态 alpha/在线 Track B。 |
 | R11 双主线治理 | 采纳并纠偏 | 第一阶段采用 `S1-M` 月频 alpha 主线 + `S1-D/S1-R` 日频风险/执行主线；只有 `S1-M` 是近期正式 alpha keep 主线。`S1-D/S1-R` 可做短期 IC、alpha 衰减、风险预警、订单失败、流动性、GMSL shock state 和离线执行审计；主动调仓或 alpha sleeve 必须另经 walk-forward、holdout、成本、容量、分钟/集合竞价和 limit_events 审计。 |
-| R10/R11 成本和日换手控制 | 部分采纳 | 往返 0.206% 写入机器参数，但披露佣金、规费、滑点、过户费为研究假设；S1-D/S1-R 三层换手控制作为离线/未来升级规则，10% 单边日换手为验证前硬上限；动态 IC 公式验证前只能 `min(0.10, formula)` 收紧或报告，不能放宽到 15%。 |
-| R10 半衰期和训练窗口敏感性 | 部分采纳 | 12 月仍是默认半衰期，18 月为预注册敏感性，6/24 月为 R10 必报诊断，36 月为可选研究网格；5 年是唯一 keep 训练窗口，4/6 年只作诊断并计入 `attempt_count`。 |
+| R10/R11 成本和日换手控制 | 部分采纳 | 往返 0.206% 写入机器参数，但披露佣金、规费、滑点、过户费为研究假设；S1-D/S1-R 三层换手控制作为离线/未来升级规则，10% 单边日换手为验证前硬上限；动态 IC 原公式只能作为 `raw_report_only_formula`，验证前只有 `min(0.10, raw_report_only_formula)` 可进入执行口径。 |
+| R10 半衰期和训练窗口敏感性 | 部分采纳 | 12 月仍是默认半衰期，18 月为预注册敏感性，6/24 月为 R10 必报诊断，36 月为可选研究网格；5 年是唯一 keep 训练窗口，4/6 年只作诊断并计入 `attempt_count` 和试验族台账。好结果不得晋级 keep，坏结果不得改默认 5 年窗口，但可形成 robustness warning 并阻塞可部署叙事。 |
+| R11 终版治理细化 | 采纳 | FDR 默认 Benjamini-Hochberg，因子相关性高时补 Storey-q；holdout access log 必须含 timestamp/operator/purpose/data_range/result_summary/pollution flag，burned holdout 后需 252 交易日 shadow/forward OOS；CSRP 误报率用 OOT 信号命中率和 shuffle baseline 估计。 |
 | GMSL 外生宏观冲击层 | 采纳并分层 | 新增能源、汇率、全球波动率、全球股指/期货、利率、商品和地缘事件窗口的 candidate source registry 与 stress audit；S1 只报告，S1.5 作为生产前审计，S3 后才可作为 tighten-only 风控候选。未验证前不得增加风险、选模或调阈值。 |
 
 ---
@@ -191,10 +192,10 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 - S1-M 使用单轨 5 年 rolling walk-forward 作为正式主证据框架；S1-D/S1-R 用同样隔离原则做正式风险/执行验证，不是同级 alpha keep 主线，也不是已废弃的 Track A/B、动态 alpha 或在线 Track B。
 - 等权 5 年 rolling 是正式主线必须保留的对照基线，R5 指数衰减加权是单轨训练权重候选；S1-D/S1-R 侧输出日频风险/执行报告，未来 tighten-only 规则需独立验证。
 - 指数衰减默认半衰期为 12 个月，主口径 `row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))`；同时必须报告 `date_balanced_decay_weight = date_weight_t / n_assets_t` 对照，防止近年股票数扩张造成隐性双重加权。两种口径均在每个训练 step 内归一化到均值 1。
-- 18 个月半衰期只作预注册敏感性；R10 的 6/24 个月作为必报诊断，36 个月只能作为可选研究网格，全部计入 `attempt_count`，不能用 OOT 或 holdout 择优。
-- 模型默认每 63 个交易日重训一次；S1-M 默认固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 默认每日重算分数、候选、风险告警和执行审计。两次重训之间使用最近一次符合 computed purge 规则的冻结模型版本。
+- 18 个月半衰期只作预注册敏感性；R10 的 6/24 个月作为必报诊断，36 个月只能作为可选研究网格，全部计入 `attempt_count`，不能用 OOT 或 holdout 择优。`date-balanced` 的理论角色是把每个交易日作为近似等权经济观察，防止上市股票数扩张让近年样本隐性超配；若 row-equal 有效但 date-balanced 失败且无法预注册解释，只能 `inconclusive` 或 discard。
+- 模型默认每 63 个交易日重训一次；S1-M 默认固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 默认每日重算分数、候选、风险告警和执行审计。两次重训之间使用最近一次符合 computed purge 规则的冻结模型版本。冻结模型必须登记 `model_version`、`train_end`、panel/label hash、参数 hash、代码提交、artifact hash、随机种子和回滚原因；命名建议为 `{track_id}_{model_family}_{train_end}_{validation_params_hash8}_{commit8}`。
 - Concept shift 告警只使用已成熟 OOT IC、因子收益或预测前已可得的分布/拥挤度指标；连续 6 步成熟 IC < 0 触发 red quarantine，最近 6 步中至少 4 步为负触发 yellow。告警不改变当前 step 模型、alpha、阈值、early stopping、特征选择或仓位。
-- R10 动态 IC 换手公式只能作为 Phase 2 report-only 或 tighten-only 诊断；输入必须是至少滞后一 step 的成熟 trailing IC。验证前有效上限必须写成 `min(0.10, formula)`，trailing IC 变好也不得 loosen 到 15%，只能报告或收紧。
+- R10 动态 IC 换手原公式只能作为 Phase 2 report-only 或 tighten-only 诊断；输入必须是至少滞后一 step 的成熟 trailing IC。验证前有效上限必须写成 `min(0.10, raw_report_only_formula)`，trailing IC 变好也不得 loosen 到 15%，只能报告或收紧。
 - 结构性 regime map、GMSL shock-state、拥挤容量和风险响应只能作为预注册 CSRP/GMSL 生产前风险审计；风险开关必须在完整 walk-forward 中独立验证，不得由人工主观覆盖。
 - 审计报告中的 3 年窗口、anchored post-2023 或多候选模型库不进入 S1/S1.5 近期路径；未来若单独研究，只能作为后置协议，并且每个 step 的选择必须只由训练窗内部 nested validation 决定。
 
@@ -252,22 +253,22 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 
 ### 验证框架参数调整（Round 5 + round2/r3/r4/r5/r6/R10/R11 执行细化）
 - **embargo**：5日 → **10日**（基于A股因子自相关实证数据）
-- **purge**：max(horizon,20) → **computed_purge_days=max(horizon*3,40)**；1/5/10 日标签为 40 个交易日，20 日标签为 60 个交易日。
-- **训练窗口**：**5年**（唯一 keep 通道）；R10 的 4/6 年窗口只作诊断敏感性，计入 `attempt_count`，不得用于改默认窗口、模型、阈值或半衰期。
+- **purge**：max(horizon,20) → **computed_purge_days=max(horizon*3,40)**；1/5/10 日标签为 40 个交易日，20 日标签为 60 个交易日。20 日标签的 40/60/80 日敏感性只能报告样本损失、label overlap proxy、HAC、bootstrap、holdout 和成本后 PnL delta；40 日对 20 日标签是 under-purge 诊断，不能支持 keep。
+- **训练窗口**：**5年**（唯一 keep 通道）；R10/R11 的 4/6 年窗口只作诊断敏感性，计入 `attempt_count` 和试验族台账，不得用于改默认窗口、模型、阈值或半衰期。好结果不得晋级 keep，坏结果不得改默认 5 年窗口，但可形成 robustness warning 并阻塞可部署叙事。
 - **训练权重**：R5 后新增单轨指数衰减候选；默认半衰期 12 个月，等权 5 年 rolling 必须作为对照，18 个月作为预注册敏感性；R10 的 6/24 个月为必报诊断，36 个月为可选研究网格，不得用 OOT/holdout 择优。
 - **主线 cadence**：S1-M 月选股默认 20 日标签、固定月末/月初调仓，是近期唯一正式 alpha keep 主线；21 日滚动为敏感性。S1-D/S1-R 默认 1/5 日标签、每日盘后输出候选分数、风险预警、GMSL shock state 和执行审计，是正式日频风险/执行主线，但不进入近期主动 alpha 调仓或 official keep。
 - **模型重训频率**：默认 63 个交易日重训；S1-M 默认固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 每日重算分数、告警和执行审计但不默认每日重训；非重训 step 使用最近一次冻结模型。
 - **OOT steps**：S1-M 最少**24步 + 分年度分析**。S1-D/S1-R 不能把 24 步写成充分日频证据；report-only 风险监控至少 252 个成熟日度决策日，tighten-only 生产规则至少 504 个成熟日、24 个自然月桶和 8 个季度桶，并同时报告日/周/月/季聚合。
 - **walk-forward 起始和总步数**：主窗口从 2005-01-01 开始，首个 OOT 起点约为 2010 年；24 步只是最低验收门槛，实际总步数按交易日历和最后 12 个月 holdout 剔除后计算并披露。
-- **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65** 或 bootstrap p **<0.10**、最后 12 个月 holdout Sharpe > 0、成本后超额为正、基础容量和成交失败不触发 fatal；Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险必须报告并执行预注册 fatal check，未触发 fatal 才能进入 keep/晋级。
+- **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65**、bootstrap p **<0.10**、最后 12 个月 holdout 至少满足方向一致、成本后超额 > 0、Sharpe > 0、MaxDD/CVaR 不显著差于 benchmark 或等权控制、单月利润贡献不超过 50%，且订单失败/成本/容量在预注册边界内；若 HAC 与 bootstrap 只有一项通过，状态为 `inconclusive` 而不是 keep。Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险必须报告并执行预注册 fatal check，未触发 fatal 才能进入 keep/晋级。
 - **IC显著性**：IC t-stat 默认使用 **Newey-West HAC** 调整；未调整 t-stat 只能作为诊断值。
 - **bootstrap方法**：**Block Bootstrap, block=max(label_horizon, rebalance_interval)**，月选股 20 日标签默认 block=21 日；S1-D/S1-R 默认 block=21 日，敏感性 5/10/21/40 日，晋级或生产 tighten-only 使用 10/21/40 中最保守结论，≥5000次重抽样。
-- **多重检验**：候选因子>20个时，必须报告FDR校正后的显著性；进入 keep/晋级时 FDR 为硬约束
+- **多重检验**：候选因子>20个时，FDR 默认使用 Benjamini-Hochberg；若因子相关性高或有效假设数不清晰，必须补充 Storey-q 诊断，并记录相关性触发指标、有效假设数和 Storey-q。进入 keep/晋级时 FDR 为硬约束。
 - **尾部风险**：S1报告模板必须记录MaxDD/VaR/CVaR/Sortino/Calmar，并对 max drawdown、CVaR、limit-lock CVaR、无法卖出的持仓暴露执行预注册 fatal check；S2 再深化尾部风险优化。
 - **Exploratory Tracking机制**：方向一致性≥65%（OOT 24步中IC与对应样本内IC同号的步数/24，辅助：最近6步中4步一致） + 冷却期≥6个月（从首次进入Exploratory Tracking日起算） + 不入组合 + 完整记录；冷却期满后若最近6步仍至少4步方向一致，只能重新进入 S1 候选队列，不能直接 keep。
-- **holdout定义**：最后12个月（约252个交易日）作为最终验收窗口，不参与调参、特征选择、early stopping、阈值选择或仓位开关选择；12 vs 18个月只在S2预实验中验证
+- **holdout定义**：最后12个月（约252个交易日）作为最终验收窗口，不参与调参、特征选择、early stopping、阈值选择、GMSL 阈值、shock window、行业规则、风控规则、日频 tighten-only 规则或仓位开关选择；12 vs 18个月只在S2预实验中验证。`holdout_access_log.tsv` 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；holdout 被用于策略选择后即 burned，只能作只读 benchmark，生产前需新增不少于 252 个交易日的 shadow/forward OOS。
 - **Concept Shift + GMSL 分层**：S1-M 保留 5 年 rolling 单轨正式强基线；S1-D/S1-R 是日频风险/执行主线但不是 alpha keep；R5 后废弃双轨自适应、在线 Track B 和动态 alpha 近期路径；concept shift 与 GMSL 诊断随 S1 报告输出，并通过成熟 IC 驱动的 yellow/red 状态机和 shock-state report 进入 quarantine/revalidation，不放宽 hard gate。
-- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md`、`consensus_audit_r5.md`、`consensus_audit_r10.md` 和 `a_share_quant_strategy_plan_updated_audit_report_20260430.md` 为准；执行前必须校验一致的参数 hash。
+- 若机器可读参数镜像与本节冲突，以本文档、`consensus_audit_report_20260430.md`、`consensus_audit_round2.md`、`consensus_audit_r3.md`、`consensus_audit_r4.md`、`consensus_audit_r5.md`、`consensus_audit_r10.md`、`a_share_quant_strategy_plan_updated_audit_report_20260430.md` 和 `consensus_audit_r11.md` 为准；执行前必须校验一致的参数 hash。
 
 ### 因子库扩展
 - P1阶段同步做3-5个另类数据源的 source registration 和 candidate ETL（北向资金、融资融券、限售解禁优先）
@@ -395,16 +396,18 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 
 ### Phase C：外部低频数据 ETL
 
-目标：补齐基本面、公司行为和风险事件。
+目标：补齐基本面、公司行为、执行增强、风险事件和 GMSL 完整外生冲击覆盖。Phase C 是后续数据收集、整理、清洗规划；R12 复核只更新文档和 registry，不执行新增抓取或入仓。
 
 优先顺序：
 
-1. 公司行为和分红送配，用于 adjusted return / total-return sanity check。
-2. 融资融券、北向、限售解禁。
-3. ETF flows、市场宽度/涨跌停压力、股指期货 basis/OI。
-4. GMSL 外生冲击候选：Brent/WTI/SC、黄金/铜/工业金属、USD/CNH/DXY、VIX/MOVE、UST、全球股指/期货和地缘事件日历；未完成时区/session cutoff/PIT/coverage 审计前只作 stress report。
-5. 财报、业绩预告、业绩快报。
-6. 股东户数、质押、龙虎榜、大宗交易。
+1. P0 governance：`track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry 和 `experiment_ledger`，用于锁定 S1-M / S1-D/S1-R 的验证边界、computed purge、holdout 污染状态、model_version、attempt count、FDR 方法和统计冲突状态。
+2. P0/P1 execution audit：`execution_label_audit`、`execution_audit/orders_audit` 和 `daily_turnover_capacity_report`，先用日频未复权 OHLCV、`tradability_daily_enriched` 和成本表形成 T+1 open/proxy、3/5 日分批、未成交 carryover 和解锁反转审计。
+3. 公司行为和分红送配，用于 adjusted return / total-return sanity check；完整官方或授权主表未闭环前，不声明完整 total-return accounting。
+4. `limit_events`、分钟/集合竞价/开盘成交明细，用于精细执行、开盘三段模型和未来日频 alpha sleeve。
+5. 融资融券、北向、限售解禁、ETF flows、市场宽度/涨跌停压力、股指期货 basis/OI。
+6. GMSL 外生冲击候选：Brent/WTI/SC、黄金/铜/工业金属、USD/CNH/DXY、VIX/MOVE、UST、全球股指/期货和地缘事件日历；未完成时区/session cutoff/PIT/coverage 审计前只作 stress report。
+7. 财报、业绩预告、业绩快报，优先登记 ROE、毛利率、盈利稳定性和盈利修正类质量因子；公告日/可得日 PIT 未审计前只做 P2 解释力候选。
+8. 股东户数、质押、龙虎榜、大宗交易。
 
 ### Phase D：特色 alpha 和高级模型
 

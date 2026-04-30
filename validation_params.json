@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30-r11-gmsl-s1r-risk-execution",
+  "version": "2026-05-01-r13-consensus-r11-hardening",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
@@ -10,6 +10,7 @@
     "consensus_audit_r6.md",
     "a_share_quant_strategy_plan_audit_report.md",
     "consensus_audit_r10.md",
+    "consensus_audit_r11.md",
     "a_share_quant_strategy_plan_updated_audit_report_20260430.md"
   ],
   "data_governance": {
@@ -50,6 +51,71 @@
       "blocked_by_source_gap"
     ],
     "source_registry_statuses_are_secondary_to_availability_bucket": true,
+    "source_registry_status_column_name": "status",
+    "warehouse_core_time_status_field_name": "source_status",
+    "source_registry_and_warehouse_source_status_are_distinct": true,
+    "source_registry_conditional_non_empty_check_required_before_promotion": true,
+    "source_registry_current_conditional_completeness_status": "known_gaps_do_not_treat_as_promotion_pass",
+    "source_registry_available_now_known_gaps": [
+      "source_vendor",
+      "warehouse_table",
+      "schema_hash",
+      "coverage_start",
+      "coverage_end",
+      "update_sla"
+    ],
+    "source_registry_conditional_completeness_rules": {
+      "available_now": {
+        "required_non_empty": [
+          "source_vendor",
+          "license_status",
+          "warehouse_table",
+          "pit_tier",
+          "time_zone",
+          "session_cutoff_rule",
+          "quality_report",
+          "usage_allowed_stage"
+        ],
+        "schema_hash_required_when_audited_table_exists": true
+      },
+      "candidate_etl_with_ingested_rows": {
+        "required_non_empty": [
+          "source_vendor",
+          "license_status",
+          "raw_location",
+          "warehouse_table",
+          "pit_tier",
+          "time_zone",
+          "session_cutoff_rule",
+          "build_script",
+          "quality_report",
+          "known_gaps",
+          "usage_allowed_stage"
+        ],
+        "schema_hash_or_schema_registry_hash_required_before_promotion": true
+      },
+      "candidate_etl_planned_only": {
+        "required_non_empty": [
+          "fields",
+          "pit_tier",
+          "time_zone",
+          "session_cutoff_rule",
+          "known_gaps",
+          "usage_allowed_stage"
+        ],
+        "schema_hash_allowed_blank_until_table_exists": true
+      },
+      "blocked_by_source_gap_or_missing": {
+        "required_non_empty": [
+          "fields",
+          "known_gaps",
+          "usage_allowed_stage",
+          "notes"
+        ],
+        "source_vendor_allowed_unknown": true,
+        "schema_hash_allowed_blank_until_source_exists": true
+      }
+    },
     "strategy_docs_must_reference_manifest_not_manual_row_counts": true,
     "features_and_labels_must_be_built_before_training": true,
     "features_and_labels_current_status": "built_r7_market_daily_v1_and_forward_returns_v1",
@@ -131,6 +197,44 @@
     "rebalance_interval_trading_days": 21,
     "model_refit_interval_trading_days": 63,
     "predictions_between_refits": "use_latest_frozen_model_version_with_valid_train_end_rule",
+    "frozen_model_registry_required": true,
+    "frozen_model_registry_file": "frozen_model_registry_v1.parquet",
+    "frozen_model_artifact_root": "model_artifacts/frozen_models",
+    "frozen_model_immutable_required": true,
+    "frozen_model_alias_policy": "aliases_may_point_to_immutable_versions_but_must_not_overwrite_artifacts",
+    "frozen_model_rollback_allowed_reasons": [
+      "data_quality_failure",
+      "leakage_failure",
+      "artifact_corruption",
+      "dependency_reproducibility_failure",
+      "pre_registered_revalidation_failure"
+    ],
+    "frozen_model_replacement_requires": [
+      "new_model_version",
+      "replacement_reason",
+      "old_artifact_hash",
+      "new_artifact_hash",
+      "validation_params_hash",
+      "code_commit",
+      "approval_record"
+    ],
+    "frozen_model_version_format": "{track_id}_{model_family}_{train_end}_{validation_params_hash8}_{code_commit8}",
+    "frozen_model_required_metadata": [
+      "model_version",
+      "track_id",
+      "model_family",
+      "train_start_date",
+      "train_end_date",
+      "label_horizon",
+      "feature_panel_hash",
+      "label_panel_hash",
+      "validation_params_hash",
+      "code_commit",
+      "artifact_hash",
+      "random_seed",
+      "dependency_lock_hash",
+      "rollback_reason_if_replaced"
+    ],
     "first_oot_start_rule": "computed_from_exchange_calendar_after_train_window_and_purge_requirements",
     "first_oot_start_must_be_reported": true,
     "expected_oot_steps_rule": "floor((last_non_holdout_trade_date - first_oot_start_trade_date + 1) / rebalance_interval_trading_days)",
@@ -219,6 +323,9 @@
       "model_refit_interval_trading_days": 63,
       "daily_prediction_does_not_mean_daily_refit": true,
       "daily_refit_allowed_only_as_preregistered_sensitivity": true,
+      "s1d_function": "daily_signal_and_risk_monitoring_using_frozen_model_outputs",
+      "s1r_function": "rebalancing_execution_and_order_risk_audit_using_more_conservative_rules",
+      "s1r_may_only_tighten_s1d_outputs_before_validation": true,
       "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
       "uses_frozen_model_between_refits": true,
       "portfolio_allowed": false,
@@ -244,8 +351,10 @@
       "dynamic_ic_turnover": {
         "status": "phase2_report_only_or_tighten_only_until_separate_walk_forward_validation",
         "base_one_way_turnover_cap": 0.1,
-        "formula": "0.10 * min(max(0.5, trailing_matured_ic / 0.03), 1.5)",
+        "raw_report_only_formula": "0.10 * min(max(0.5, trailing_matured_ic / 0.03), 1.5)",
+        "raw_formula_must_not_set_cap_before_validation": true,
         "max_effective_cap_before_validation": 0.1,
+        "effective_cap_formula_before_validation": "min(base_one_way_turnover_cap, raw_report_only_formula)",
         "allowed_effect_before_validation": "tighten_only_or_report_only",
         "ic_input_rule": "trailing_matured_walk_forward_ic_only_after_label_maturity_with_at_least_one_step_lag",
         "forbidden_inputs": [
@@ -257,6 +366,7 @@
         "pre_validation_effective_turnover_cap_formula": "min(base_one_way_turnover_cap, base_one_way_turnover_cap * min(max(0.5, trailing_matured_ic / 0.03), 1.5))",
         "pre_validation_can_loosen_cap": false,
         "pre_validation_allowed_effect": "report_only_or_tighten_only",
+        "post_validation_max_cap_requires_independent_validation": true,
         "post_validation_loosen_requires": "s3_preregistered_walk_forward_holdout_cost_capacity_pass"
       },
       "orders_audit_required": true,
@@ -374,7 +484,7 @@
     "newey_west_bandwidth_selection": "deterministic_rule_of_thumb",
     "newey_west_bandwidth_rule": "lag_floor_4_times_n_over_100_power_2_over_9_min_1",
     "bootstrap_p_max": 0.1,
-    "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min OR block_bootstrap_p < bootstrap_p_max",
+    "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min AND block_bootstrap_p < bootstrap_p_max for keep; if only one passes status is inconclusive",
     "block_unit": "trading_days",
     "block_bootstrap_unit": "trading_days",
     "block_bootstrap_days": 21,
@@ -387,6 +497,29 @@
     ],
     "bootstrap_samples_min": 5000,
     "fdr_required_if_factor_count_gt": 20,
+    "fdr_default_method": "benjamini_hochberg",
+    "fdr_storey_q_report_required_when_factor_correlation_high": true,
+    "fdr_storey_q_trigger_metric": "max_abs_pairwise_factor_correlation_or_effective_hypothesis_ratio",
+    "fdr_storey_q_trigger_threshold": 0.6,
+    "fdr_storey_q_pi0_estimator": "bootstrap_or_smoother_on_preregistered_lambda_grid",
+    "fdr_applies_to": "candidate_factor_families_gt_20_and_any_keep_or_promotion_decision",
+    "statistical_conflict_status_enum": [
+      "pass",
+      "inconclusive",
+      "fail"
+    ],
+    "statistical_conflict_policy": "hac_and_block_bootstrap_both_required_for_keep; if_only_one_passes_status_inconclusive_not_keep",
+    "hac_bootstrap_conflict_examples": [
+      "hac_t_stat_ge_1_65_and_bootstrap_p_ge_0_10_is_inconclusive",
+      "hac_t_stat_lt_1_65_and_bootstrap_p_lt_0_10_is_inconclusive_pending_preregistered_sensitivity_review"
+    ],
+    "purge_marginal_benefit_report_required": true,
+    "purge_sensitivity_days": [
+      40,
+      60,
+      80
+    ],
+    "purge_sensitivity_role": "report_sample_loss_label_overlap_and_metric_delta_not_parameter_selection",
     "holdout_window": "last_12_months",
     "holdout_sharpe_min": 0.0,
     "holdout_sharpe_operator": ">",
@@ -563,6 +696,41 @@
     }
   },
   "factor_processing": {
+    "factor_library_registry_required": true,
+    "factor_library_registry_file": "factor_library_registry_v1.parquet_or_csv",
+    "factor_library_registry_min_fields": [
+      "factor_id",
+      "factor_family",
+      "source_table",
+      "source_fields",
+      "available_at_rule",
+      "decision_time_rule",
+      "pit_tier",
+      "transform_pipeline_hash",
+      "coverage_start",
+      "coverage_end",
+      "quality_report",
+      "allowed_stage"
+    ],
+    "p1_market_only_factor_families": [
+      "momentum",
+      "reversal",
+      "volatility",
+      "liquidity_turnover",
+      "adv_amount",
+      "market_value_size",
+      "beta",
+      "tradability_universe",
+      "pit_industry_neutralization"
+    ],
+    "p2_fundamental_quality_factor_families": [
+      "roe",
+      "gross_margin",
+      "operating_margin",
+      "earnings_stability",
+      "cash_flow_quality"
+    ],
+    "p2_fundamental_quality_allowed_stage": "candidate_tracking_only_until_announcement_date_report_period_restatement_and_vendor_compute_time_pit_audit",
     "orthogonalization": {
       "enabled_for_composite_models": true,
       "method": "gram_schmidt",
@@ -615,6 +783,16 @@
       "date_balanced_decay"
     ],
     "date_balanced_decay_formula": "row_weight_i_t = 2 ** (-age_trading_days_t / (half_life_months * 21)) / n_assets_t",
+    "date_balanced_theory": "date_balanced_decay_tests_date_level_economic_effect_by_preventing_later_dates_with_more_listed_assets_from_receiving_implicit_extra_weight",
+    "row_equal_vs_date_balanced_decision_rule": "if_only_row_equal_passes_and_date_balanced_fails_without_pre_registered_explanation_status_inconclusive_or_discard_not_keep",
+    "month_to_trading_days_conversion_default": 21,
+    "month_to_trading_days_conversion_sensitivity": [
+      19,
+      21,
+      23
+    ],
+    "month_to_trading_days_conversion_sensitivity_role": "report_only_not_selection",
+    "month_to_trading_days_conversion_sensitivity_applies_to": "exponential_decay_half_life_conversion",
     "weight_normalization": "normalize_within_each_training_step_mean_1",
     "weight_reports_required": [
       "effective_sample_size",
@@ -640,6 +818,18 @@
   },
   "universe_audit": {
     "required_before_panel_keep": true,
+    "survivorship_bias_audit_required": true,
+    "survivorship_bias_audit_required_before_official_s1": true,
+    "survivorship_bias_audit_min_checks": [
+      "delisted_asset_retention_by_year",
+      "delist_date_or_last_bar_date_treatment",
+      "pre_delist_return_and_halt_handling",
+      "assets_not_in_current_stock_list_but_present_in_history_are_retained",
+      "current_stock_list_not_used_to_filter_past_universe",
+      "universe_daily_construction_script_hash",
+      "annual_universe_counts_and_drop_reason_report"
+    ],
+    "delisted_flag_is_not_sufficient_proof": true,
     "default_universe": "universe_daily.in_factor_research_universe",
     "default_universe_role": "entry_eligible_universe_proxy_not_full_research_observable_universe",
     "known_rule": "can_trade_close_based AND listing_age_trading_days >= 60 AND NOT is_risk_warning_pit",
@@ -778,6 +968,10 @@
       "requires_row_equal_vs_date_balanced_weight_report": true,
       "requires_non_stress_period_non_degradation": true,
       "requires_validated_risk_response_before_position_change": true,
+      "false_positive_rate_method": "signal_event_hit_rate_on_walk_forward_oot_fixed_forward_window",
+      "false_positive_rate_formula": "1 - hit_rate",
+      "false_positive_baseline": "timestamp_shuffle_permutation_test",
+      "false_positive_no_statistical_power_if_permutation_p_gt": 0.05,
       "same_step_oot_or_holdout_feedback_forbidden": true,
       "human_override_forbidden": true,
       "requires_gmsl_stress_audit": true,
@@ -818,7 +1012,8 @@
       "walk_forward_calendar_with_actual_oot_step_count",
       "walk_forward_calendar_hash",
       "train_cutoff_purge_embargo_validation",
-      "validation_params_hash"
+      "validation_params_hash",
+      "survivorship_bias_audit"
     ],
     "blocking_before_factor_keep": [
       "valuation_gap_sensitivity_for_valuation_features",
@@ -836,6 +1031,119 @@
       "optional_adwin_bocpd_diagnostics",
       "optional_decay_half_life_research_grid_outside_keep_decision",
       "gmsl_candidate_source_fetch_completion"
+    ]
+  },
+  "data_warehouse_supplement_plan": {
+    "status": "planned_not_executed_in_r12",
+    "execute_without_user_instruction": false,
+    "priority_layers": [
+      {
+        "priority": "P0_governance",
+        "artifacts": [
+          "track_registry_v1",
+          "walk_forward_calendar_v1",
+          "holdout_access_log.tsv",
+          "test_family_registry",
+          "experiment_ledger"
+        ],
+        "purpose": "make S1-M and S1-D/S1-R validation boundaries reproducible",
+        "holdout_access_log_min_fields": [
+          "timestamp",
+          "operator",
+          "purpose",
+          "track_id",
+          "data_range",
+          "result_summary",
+          "decision_or_read_only",
+          "pollution_flag",
+          "followup_action"
+        ],
+        "burned_holdout_shadow_period_trading_days": 252,
+        "blocks": [
+          "official_s1_main_evidence",
+          "holdout_final_acceptance"
+        ]
+      },
+      {
+        "priority": "P0_execution_audit",
+        "artifacts": [
+          "execution_label_audit",
+          "execution_audit/orders_audit",
+          "daily_turnover_capacity_report"
+        ],
+        "purpose": "separate close-to-close IC labels from executable account PnL",
+        "blocks": [
+          "factor_keep",
+          "s1d_tighten_only",
+          "daily_alpha_claim"
+        ]
+      },
+      {
+        "priority": "P1_total_return",
+        "artifacts": [
+          "official_or_authorized_corporate_actions_main_table",
+          "total_return_accounting_audit"
+        ],
+        "purpose": "close dividend/allotment/ex-rights accounting",
+        "blocks": [
+          "total_return_claim",
+          "fundamental_enhancement_claim"
+        ]
+      },
+      {
+        "priority": "P1_execution_data",
+        "artifacts": [
+          "limit_events",
+          "prices_minute",
+          "auction_or_open_execution_detail"
+        ],
+        "purpose": "support intraday execution, open-impact and daily alpha sleeve validation",
+        "blocks": [
+          "daily_alpha_sleeve",
+          "intraday_execution_claim"
+        ]
+      },
+      {
+        "priority": "P1_5_gmsl_completion",
+        "artifacts": [
+          "fx_rates",
+          "global_rates",
+          "spot_and_futures_energy",
+          "global_equity_futures",
+          "MOVE_or_equivalent_rate_vol",
+          "commodity_basket",
+          "pre_registered_geopolitical_event_calendar"
+        ],
+        "purpose": "complete external shock coverage for report-only and future tighten-only audit",
+        "blocks": [
+          "full_gmsl_coverage_claim",
+          "gmsl_tighten_only_rule"
+        ]
+      },
+      {
+        "priority": "P1_registry_hygiene",
+        "artifacts": [
+          "schema_registry_corporate_actions_entries",
+          "schema_registry_governance_artifact_entries",
+          "schema_registry_limit_events_entries",
+          "schema_registry_prices_minute_or_auction_entries",
+          "source_registry_conditional_non_empty_check"
+        ],
+        "purpose": "make source and schema promotion machine-auditable and human-readable",
+        "blocks": [
+          "data_source_promotion",
+          "schema_hash_audit_closure"
+        ]
+      }
+    ],
+    "post_etl_required_audits": [
+      "manifest_hash_update",
+      "source_registry_hash_update",
+      "schema_registry_hash_update",
+      "coverage_report",
+      "leakage_check",
+      "source_time_status_audit",
+      "pit_audit"
     ]
   },
   "experiment_ledger": {
@@ -858,21 +1166,68 @@
       "total_trials_in_family",
       "selection_path",
       "pre_registered_or_exploratory",
+      "model_version",
+      "model_artifact_hash",
+      "fdr_method",
+      "fdr_q_value",
+      "storey_q_value",
+      "factor_test_correlation_metric",
+      "effective_hypothesis_count",
+      "statistical_conflict_status",
       "date_weighting_scheme",
       "half_life_months",
       "universe_rule_version",
+      "holdout_access_log_path",
       "holdout_access_count",
       "holdout_burned_flag",
+      "holdout_shadow_period_start",
+      "holdout_shadow_period_end",
       "crowding_risk_score",
       "limit_lock_cvar",
       "orders_audit_path",
       "execution_label_audit_path",
       "execution_label_id",
       "gmsl_manifest_hash",
-      "gmsl_shock_state_version"
+      "gmsl_shock_state_version",
+      "csrp_signal_hit_rate",
+      "csrp_false_positive_rate"
     ],
     "holdout_access_log_required": true,
-    "holdout_burned_flag_required_after_repeated_strategy_selection_use": true,
+    "holdout_access_log_schema_version": "holdout_access_log_v1",
+    "holdout_access_log_required_fields": [
+      "timestamp",
+      "operator",
+      "purpose",
+      "run_id",
+      "track_id",
+      "label_id",
+      "calendar_id",
+      "panel_hash",
+      "execution_rule_id",
+      "validation_params_hash",
+      "data_range",
+      "result_summary",
+      "result_artifact_hash",
+      "decision_or_read_only",
+      "pollution_flag",
+      "followup_action"
+    ],
+    "holdout_burned_flag_required_after_any_strategy_selection_use": true,
+    "burned_holdout_trigger": "any_holdout_result_used_for_strategy_selection_parameter_choice_threshold_choice_feature_choice_or_promotion_decision",
+    "holdout_access_log_min_fields": [
+      "timestamp",
+      "operator",
+      "purpose",
+      "track_id",
+      "data_range",
+      "result_summary",
+      "decision_or_read_only",
+      "pollution_flag",
+      "followup_action"
+    ],
+    "burned_holdout_policy": "after_strategy_selection_use_holdout_becomes_read_only_benchmark_and_new_forward_oos_or_shadow_period_is_required",
+    "burned_holdout_shadow_period_basis": "same_as_holdout_trading_days",
+    "burned_holdout_shadow_period_trading_days": 252,
     "stress_slice_selection_forbidden": true
   },
   "s1_required_diagnostics": {
@@ -903,6 +1258,19 @@
       "t_plus_1_open_or_proxy",
       "vwap_or_split_execution_proxy"
     ],
+    "minimum_field_templates": [
+      "exec_ret_20d_t1_open_to_next_rebalance",
+      "exec_ret_20d_t1_split_3d",
+      "exec_ret_20d_t1_split_5d",
+      "exec_ret_5d_t1_open_or_proxy",
+      "failed_order_carryover_return",
+      "unfilled_sell_drawdown",
+      "unlock_reversal_1d",
+      "unlock_reversal_3d",
+      "unlock_reversal_5d"
+    ],
+    "orders_audit_offline_weight_field": "offline_sim_target_weight",
+    "orders_audit_forbidden_production_order_field": "target_weight",
     "required_metrics": [
       "correlation",
       "sign_agreement",
@@ -949,6 +1317,8 @@
     "minimum_source_audit_fields": [
       "source_vendor",
       "license_status",
+      "build_script",
+      "schema_hash",
       "time_zone",
       "session_cutoff_rule",
       "pit_tier",

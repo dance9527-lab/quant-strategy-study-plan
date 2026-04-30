@@ -70,6 +70,37 @@
 
 Git 项目中的依据文档和 `warehouse_build_manifest.json` 是当前策略文档事实源。`D:\data\warehouse` 根目录下同名说明文件若滞后于 Git 镜像，不得覆盖 manifest 和本地 audit JSON 的结论。
 
+R11 响应矩阵：
+
+| R11 关注点 | 当前状态 | 使用边界 |
+|---|---|---|
+| P1 market-only 因子库 | `features/market_daily_v1` 已覆盖动量、反转、波动率、流动性/换手、ADV、规模、市值慢变量、可交易性和 PIT 行业字段 | 可用于 S1-M/S1-D/S1-R 研究准备；正式 keep 前仍需 factor library registry、walk-forward calendar、holdout log 和实验登记 |
+| 数据质量和幸存者偏差 | 历史证券和退市样本已进入 `security_master`/行情面板，但退市日期、退市前收益和三层 universe 仍未单独审计 | `is_delisted` 只能说明样本存在；不能宣称幸存者偏差闭环 |
+| FDR / HAC / bootstrap / holdout | `validation_params.json` 已写入 BH/Storey-q、HAC+block bootstrap 同时通过、burned holdout 252 日 shadow 规则 | 这是执行前约束，不代表治理产物已生成 |
+| GMSL | Cboe VIX/OVX/GVZ 局部 candidate 入仓；FRED 能源/汇率/利率/全球股指仍超时或待接入 | 只能 stress report/source audit；不得用于 alpha、选模、调阈值或放宽风险 |
+| P2 盈利质量 | ROE、毛利率、盈利稳定性等已登记为候选解释力方向 | 公告日、报告期、重述版本和供应商计算时点 PIT 审计前不得进入 keep |
+
+命名边界：
+
+- `external_data_sources.csv` 使用 `availability_bucket` 作为一级状态，`status` 作为二级来源/进度描述。
+- warehouse 核心表字段里的 `source_status` 是表内 source/time/status 审计字段，和 source registry 的 `status` 列不是同一概念。
+- source registry 当前已经扩展为 21 列；`schema_hash`、`source_vendor`、`raw_location`、`build_script`、`update_sla` 等字段允许对 planned-only 或 blocked source 暂空，但任何 `available_now` 或已产生候选行的 `candidate_etl` 在升格前必须补齐 vendor/license、warehouse table、timezone/session cutoff、quality report、schema hash 或 schema registry hash。
+
+## R12 数据补充规划（暂不执行）
+
+本节只给出后续 data warehouse 收集、整理、清洗和审计方案；R12 复核不执行新增外部抓取或入仓。
+
+| 优先级 | 补充对象 | 主要产物 | 清洗和审计要点 | 未完成影响 |
+|---|---|---|---|---|
+| P0 governance | 验证治理工件 | `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、`experiment_ledger` | 由交易日历、R7 panel hash 和 `validation_params.json` 生成；记录 computed purge、label maturity、holdout flag、attempt count、FDR 方法、HAC/bootstrap 冲突状态、冻结模型版本、访问日志和参数 hash；holdout log 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；burned holdout 后需要不少于 252 个交易日 shadow/forward OOS | 阻塞官方 S1 主证据和 holdout 最终验收 |
+| P0 execution audit | 可执行收益审计 | `execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和 T+1/分批执行规则生成 open/proxy、3/5 日分批、未成交 carryover、解锁反转和订单状态；先标记为日频 L1 代理 | 阻塞 factor keep、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
+| P1 total-return | 公司行为主表 | 官方或授权 `corporate_actions` 主表、total-return audit | 统一 `asset_id`、公告日、登记日、除权除息日、现金分红、送转配字段；与 R7 sanity reference 和 adjusted-vs-raw event-like 样本交叉校验 | 阻塞完整 total-return accounting 和基本面增强叙事 |
+| P1 execution data | 执行增强数据 | `limit_events`、`prices_minute`、集合竞价/开盘成交明细 | 先 source registration 和样本日 smoke test；区分盘中可见字段和盘后统计字段；生成 timezone、PIT、coverage、重复键、成交失败审计 | 阻塞日频 alpha sleeve、精细开盘冲击和三段成交模型 |
+| P1/P1.5 flows | 资金流/衍生品/宽度 | 融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI | 逐源登记 vendor/license/披露时点；统一 A 股交易日历和代码映射；做 coverage、异常值、PIT 和 leakage audit | 不阻塞 market-only S1-M，但阻塞可部署风控增强 |
+| P1.5 GMSL | 外生冲击完整面板 | FX、rates、spot/futures energy、global equity futures、MOVE、commodity basket、地缘事件日历 | 保留 Cboe 局部成功；为 FRED 超时源准备替代 vendor/mirror；全部转 UTC 后按 A 股 T 日 16:00 session cutoff 顺延；阈值只用训练窗计算 | GMSL 继续只能 partial stress report，不能进入 alpha、选模或调阈值 |
+| P1 hygiene | schema registry 卫生 | `schema_registry.csv`、schema hash、source registry hash | 补登记 `corporate_actions`、治理产物、`limit_events`、`prices_minute/auction`；清理 GMSL schema 描述中的乱码或不可读字段说明；每次升格前重算 schema hash | 不阻塞 market-only 研究，但阻塞数据升格和机器审计闭环 |
+| P2 explainability | 基本面/事件解释力 | 财报公告日、ROE、毛利率、盈利稳定性、现金流质量、分析师预期、股东户数、质押、龙虎榜、大宗交易、新闻事件 | Step 1-4 稳定后再立项；先解决授权、公告日/报告期/重述版本、披露时点、代码映射、文本去重和 survivorship；未 PIT 审计前只做 candidate tracking | 不阻塞近期 S1-M |
+
 ## 目录结构
 
 | 目录/文件 | 内容 | 当前用途 |

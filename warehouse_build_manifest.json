@@ -65,6 +65,22 @@
     "schema_registry": {
       "path": "D:\\data\\warehouse\\schemas\\schema_registry.csv",
       "sha256": "2F6059FC1CD2B93FE88A7029A928C5011C413DC173E325A37BA4B3120BB92ECB"
+    },
+    "git_source_registry": {
+      "path": "D:\\quantum_a0\\quant-strategy-study-plan\\external_data_sources.csv",
+      "sha256": "2F2BDAED6A4FF4C096A6206EC1A3DFDFDD8F2971F4EB304CF9FEDB1CFD00E6FD"
+    },
+    "git_validation_params": {
+      "path": "D:\\quantum_a0\\quant-strategy-study-plan\\validation_params.json",
+      "sha256": "A3A485BD4E3BD1AAF5E448E7DC788CC29AA291F315E3DC9A56826545636B5D36"
+    },
+    "git_data_usage_guide": {
+      "path": "D:\\quantum_a0\\quant-strategy-study-plan\\DATA_USAGE_GUIDE.md",
+      "sha256": "5328A4B49172C58418105954A916C24E09A7A4980FC7BA3394DECAB71B603A84"
+    },
+    "git_warehouse_readme": {
+      "path": "D:\\quantum_a0\\quant-strategy-study-plan\\WAREHOUSE_README.md",
+      "sha256": "220EAC46714669D212074F4A01126D91D613FFD1624B2D3C926BC89B32553405"
     }
   },
   "table_snapshot": {
@@ -112,7 +128,12 @@
     "gmsl_timezone_audit_present": true,
     "gmsl_source_fetch_status_present": true,
     "gmsl_external_rows_available": true,
-    "gmsl_external_rows_are_candidate_only": true
+    "gmsl_external_rows_are_candidate_only": true,
+    "source_registry_conditional_completeness_pass": false,
+    "governance_artifacts_present": false,
+    "survivorship_bias_audit_present": false,
+    "factor_library_registry_present": false,
+    "warehouse_root_doc_mirror_hashes_match_git": false
   },
   "must_disclose_gaps": [
     "valuation_daily_2026_gap_2026-01-05_to_2026-02-05",
@@ -127,7 +148,11 @@
     "walk_forward_calendar_v1_missing",
     "holdout_access_log_missing",
     "test_family_registry_missing",
-    "execution_label_audit_missing"
+    "execution_label_audit_missing",
+    "source_registry_conditional_completeness_gaps_remain",
+    "factor_library_registry_missing",
+    "survivorship_bias_audit_missing",
+    "warehouse_root_doc_mirror_may_lag_git_mirror"
   ],
   "usage_rules": {
     "strategy_docs_must_reference_manifest_hash": true,
