@@ -1,10 +1,10 @@
 {
-  "manifest_version": "2026-04-30-r7",
-  "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_r7_20260430_094835",
+  "manifest_version": "2026-04-30-r11-gmsl-risk-execution",
+  "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_r7_20260430_094835_plus_r11_gmsl_partial_cboe_20260430_221532",
   "purpose": "warehouse_generated_data_fact_manifest",
   "canonical_warehouse": "D:\\data\\warehouse",
   "generated_for_repo": "D:\\quantum_a0\\quant-strategy-study-plan",
-  "generated_at": "2026-04-30 09:48:35",
+  "generated_at": "2026-04-30 22:15:32",
   "source_reports": {
     "base_lineage_manifest": {
       "path": "D:\\data\\warehouse\\lineage_manifest\\warehouse_build_20260429_021444.json",
@@ -12,7 +12,7 @@
     },
     "leakage_check_report": {
       "path": "D:\\data\\warehouse\\audit_reports\\leakage_check_report.json",
-      "sha256": "3F2EDE71962EC1E52994C0466C4AECBFF655FEBA415F0C78ECC4FC8D8C14F2AB"
+      "sha256": "E95AE27B66914C9D4A95043E1C583998F68CC6D72619F51A6FA7EF4C38205619"
     },
     "p1_data_preconditions_build_summary": {
       "path": "D:\\data\\warehouse\\audit_reports\\p1_data_preconditions_build_summary.json",
@@ -41,6 +41,30 @@
     "corporate_action_adjustment_sanity_report": {
       "path": "D:\\data\\warehouse\\audit_reports\\corporate_action_adjustment_sanity_report.json",
       "sha256": "58FD97B60E2F6609203D9DA9A74A4234151C38DFD83FA9EF3DAC2407D577D0C3"
+    },
+    "gmsl_manifest": {
+      "path": "D:\\data\\warehouse\\audit_reports\\gmsl_manifest.json",
+      "sha256": "CE31184347FD34146BFD98EB1C85CA6034B1CF9DDCDE3663F6F8A7CBEBB3FFB5"
+    },
+    "gmsl_timezone_available_at_audit": {
+      "path": "D:\\data\\warehouse\\audit_reports\\gmsl_timezone_available_at_audit.json",
+      "sha256": "720A94198614CBC2263617CE370907EB5B9A890D37BDE56BB77B256EDD8B5FEF"
+    },
+    "gmsl_shock_state_audit": {
+      "path": "D:\\data\\warehouse\\audit_reports\\gmsl_shock_state_audit.json",
+      "sha256": "8BD1284F308A1238439309E42440EDF574456647A6F599237D03414E88581B6F"
+    },
+    "gmsl_source_fetch_status": {
+      "path": "D:\\data\\warehouse\\audit_reports\\gmsl_source_fetch_status.csv",
+      "sha256": "E641A62E8B8746274B4F37EFF26560118874BFD234434E5BA215322D050FA644"
+    },
+    "gmsl_coverage_report": {
+      "path": "D:\\data\\warehouse\\audit_reports\\gmsl_coverage_report.csv",
+      "sha256": "5E593FEDBD05C5E1229A944FF2ED0A4D8C73D9D8BA940380C7C6A4EB58B03FCF"
+    },
+    "schema_registry": {
+      "path": "D:\\data\\warehouse\\schemas\\schema_registry.csv",
+      "sha256": "2F6059FC1CD2B93FE88A7029A928C5011C413DC173E325A37BA4B3120BB92ECB"
     }
   },
   "table_snapshot": {
@@ -62,7 +86,10 @@
     "index_membership_rows": 3600,
     "features_market_daily_v1_rows": 15420654,
     "labels_forward_returns_v1_rows": 15420654,
-    "corporate_actions_rows": 9534
+    "corporate_actions_rows": 9534,
+    "global_macro_daily_rows": 17526,
+    "gmsl_shock_state_rows": 9176,
+    "geopolitical_event_calendar_rows": 0
   },
   "source_status_summary": {
     "availability_bucket_policy": "external_data_sources.csv availability_bucket remains canonical for strategy planning",
@@ -71,7 +98,8 @@
     "core_table_source_status": "r7_required_columns_present",
     "corporate_actions": "akshare sanity reference plus adjusted-vs-raw sanity only; full official main table still source gap",
     "candidate_etl_sources": "registered only unless separately ingested and audited",
-    "blocked_by_source_gap_sources": "sh_bj_historical_st, full_official_suspension_archive, historical_pit_index_membership, official_or_authorized_full_corporate_actions"
+    "blocked_by_source_gap_sources": "sh_bj_historical_st, full_official_suspension_archive, historical_pit_index_membership, official_or_authorized_full_corporate_actions",
+    "gmsl": "candidate_etl partial Cboe VIX/OVX/GVZ rows ingested; 2026-04-30 FRED fredgraph.csv configured series timed out; stress_report_only until full timezone/session cutoff/PIT/coverage audit passes"
   },
   "validation_status": {
     "feature_panel_built": true,
@@ -79,7 +107,12 @@
     "source_status_audit_present": true,
     "pit_feature_audit_present": true,
     "label_audit_present": true,
-    "corporate_action_sanity_present": true
+    "corporate_action_sanity_present": true,
+    "gmsl_candidate_tables_initialized": true,
+    "gmsl_timezone_audit_present": true,
+    "gmsl_source_fetch_status_present": true,
+    "gmsl_external_rows_available": true,
+    "gmsl_external_rows_are_candidate_only": true
   },
   "must_disclose_gaps": [
     "valuation_daily_2026_gap_2026-01-05_to_2026-02-05",
@@ -89,12 +122,23 @@
     "full_official_suspension_archive_missing",
     "historical_pit_index_membership_missing",
     "exchange_calendar_is_unified_proxy_not_verified_three_exchange_history",
-    "cost_model_contains_research_assumptions_for_commission_slippage_impact"
+    "cost_model_contains_research_assumptions_for_commission_slippage_impact",
+    "gmsl_external_macro_sources_only_partially_ingested_and_not_pit_audited",
+    "walk_forward_calendar_v1_missing",
+    "holdout_access_log_missing",
+    "test_family_registry_missing",
+    "execution_label_audit_missing"
   ],
   "usage_rules": {
     "strategy_docs_must_reference_manifest_hash": true,
     "manual_row_counts_are_not_authoritative": true,
     "features_and_labels_are_built_but_training_still_requires_walk_forward_calendar_and_holdout_log": true,
-    "return_adjusted_pit_is_adjusted_return_proxy_until_corporate_actions_audit": true
+    "return_adjusted_pit_is_adjusted_return_proxy_until_corporate_actions_audit": true,
+    "gmsl_sources_are_candidate_only_until_timezone_session_cutoff_pit_audit": true,
+    "s1d_tighten_only_requires_504_matured_daily_decision_days": true,
+    "execution_aligned_label_audit_required_before_daily_alpha_claim": true,
+    "s1d_is_daily_risk_execution_mainline_not_alpha_keep": true,
+    "gmsl_fetch_attempt_errors_must_be_disclosed": true,
+    "gmsl_partial_cboe_success_must_not_be_treated_as_full_macro_coverage": true
   }
 }

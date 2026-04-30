@@ -4,7 +4,7 @@
 
 本目录是 `D:\data` 的 point-in-time 数据仓库。原始数据不被修改，所有派生产物都保留来源文件、可见时间和质量标记。
 
-当前策略 Git 项目将本 README、`DATA_USAGE_GUIDE.md`、`external_data_sources.csv` 和 `warehouse_build_manifest.json` 作为数据依据文档镜像。表行数、最大日期、source status 和构建脚本以根目录 `warehouse_build_manifest.json` 与 `audit_reports/leakage_check_report.json`、`audit_reports/source_status_audit_r7.json`、`audit_reports/feature_label_panel_v1_manifest.json`、`audit_reports/p1_data_preconditions_validation.json` 为准；策略文档不得把手工复制的行数当作单一权威。
+当前策略 Git 项目将本 README、`DATA_USAGE_GUIDE.md`、`external_data_sources.csv` 和 `warehouse_build_manifest.json` 作为数据依据文档镜像。表行数、最大日期、source status 和构建脚本以根目录 `warehouse_build_manifest.json` 与 `audit_reports/leakage_check_report.json`、`audit_reports/source_status_audit_r7.json`、`audit_reports/feature_label_panel_v1_manifest.json`、`audit_reports/gmsl_manifest.json`、`audit_reports/p1_data_preconditions_validation.json` 为准；策略文档不得把手工复制的行数当作单一权威。
 
 ## 核心目录
 
@@ -22,8 +22,9 @@
 - `processed_inventory/`：旧 `processed` 产物盘点，用于判断可复用性。
 - `schemas/`：字段登记和质量规则。
 - `configs/retention_policy.yaml`：派生产物、缓存、临时解压和告警归档策略；原始数据不删除。
-- `features/market_daily_v1`、`labels/forward_returns_v1`：R7 已生成 market-only 日频特征和 forward return 标签面板，各 15,420,654 行，正式 S1 训练前仍需 walk-forward calendar、holdout log 和实验登记。
+- `features/market_daily_v1`、`labels/forward_returns_v1`：R7 已生成 market-only 日频特征和 forward return 标签面板，各 15,420,654 行，正式 S1 训练前仍需 walk-forward calendar、holdout log、execution label audit 和实验登记。
 - `corporate_actions/`：R7 AkShare/Sina/Eastmoney 公司行为 sanity reference，不是完整官方公司行为主表。
+- `global_macro_daily/`、`gmsl_shock_state/`、`geopolitical_event_calendar/`：R11 已初始化 GMSL candidate 表和 STATUS；2026-04-30 实际抓取中，FRED `fredgraph.csv` 配置源全部超时，Cboe 官方 VIX/OVX/GVZ CSV 成功形成 17,526 行 `global_macro_daily` 和 9,176 行 partial `gmsl_shock_state`。这些数据仍只作 source registry、stress report 和时区/session cutoff 审计框架，不能作为 alpha 输入。
 
 ## 使用建议
 
@@ -233,10 +234,10 @@
 剩余缺口和状态分层：
 
 - 单一事实源：当前 `warehouse_build_manifest.json` 已在策略 Git 项目中建立为依据文档镜像；仓库侧如果重建，应由构建脚本生成同名 manifest，并用它派生 STATUS 和目录状态，避免手工状态文件漂移。
-- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、R7 feature/label panel 和核心 source status 字段可用于 market-only S1 研究准备；仍需引用 manifest/hash 并完成 walk-forward/holdout 实验登记。
-- `missing`：`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账和完整官方/授权公司行为主表仍未生成。
+- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、R7 feature/label panel 和核心 source status 字段可用于 market-only S1 研究准备；仍需引用 manifest/hash 并完成 walk-forward/holdout、execution label audit 和实验登记。
+- `missing`：`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账、execution label audit 和完整官方/授权公司行为主表仍未生成。
 - `blocked_by_source_gap`：沪/北历史 ST、摘帽/摘星、完整交易所官方停复牌历史、历史 PIT 指数成分/权重、独立公司行为/除权除息/分红送配主表仍缺官方、授权或可靠历史源。
-- `candidate_etl`：融资融券、北向资金、限售解禁、ETF flow、股指期货 basis/OI、市场宽度、分钟/集合竞价、财报披露、股东户数、质押、龙虎榜、大宗交易和新闻公告只登记为候选源；未入仓、未 PIT 审计前不得进入官方 S1 keep。
+- `candidate_etl`：融资融券、北向资金、限售解禁、ETF flow、股指期货 basis/OI、市场宽度、分钟/集合竞价、财报披露、GMSL 外生冲击源、股东户数、质押、龙虎榜、大宗交易和新闻公告只登记为候选源；未入仓、未 PIT/timezone/session cutoff/coverage 审计前不得进入官方 S1 keep。
 - 手工状态文件：`reference_rates/STATUS.md`、`benchmarks/STATUS.md` 和 `audit_reports/warehouse_directory_status.csv` 可能滞后于 P1 更新；正式实验引用 Git 侧 manifest、leakage check 和 P1 validation，不以这些手工状态文件为单一事实源。
 - 交易所级日历当前为统一 A 股日历代理，不是三所各自官方历史日历。
 - `return_adjusted_pit` 可作为 adjusted-return proxy；在公司行为主表和 total-return audit 未完成前，不能宣称完整 total-return accounting 闭环。
@@ -262,6 +263,30 @@
 
 - `leakage_check.py --workers 6` 已扩展到 17 类目录，全部 PASS；新增覆盖 `features`、`labels` 和 `corporate_actions`。
 - `features/market_daily_v1` 与 `labels/forward_returns_v1` 行数一致。
+
+## R11 GMSL candidate source initialization (2026-04-30)
+
+新增脚本：`D:\data\scripts\warehouse\apply_gmsl_candidate_sources.py`。
+
+新增/增强产物：
+
+- `global_macro_daily/global_macro_daily.parquet`：GMSL 外生宏观候选表，当前 17,526 行，覆盖 Cboe VIX、OVX、GVZ 三个已成功抓取的公开 CSV 源。
+- `gmsl_shock_state/gmsl_shock_state.parquet`：oil/fx/global risk-off/rate/commodity shock 候选状态表，当前 9,176 行；由于能源价格、FX、利率和全球股指源仍未成功入仓，shock state 只是 partial report-only 产物。
+- `geopolitical_event_calendar/geopolitical_event_calendar.parquet`：预注册地缘事件窗口候选表，当前 0 行。
+- `audit_reports/gmsl_source_fetch_status.csv`：公开源抓取状态；2026-04-30 对 FRED `fredgraph.csv` 配置源执行实际抓取，所有 configured FRED series 均 `ReadTimeout`；同轮 Cboe VIX/OVX/GVZ 官方 CSV 抓取成功。
+- `audit_reports/gmsl_coverage_report.csv`：当前 Cboe 候选源覆盖报告，VIX 1990-01-02 至 2026-04-29，OVX/GVZ 2009-09-18 至 2026-04-29。
+- `audit_reports/gmsl_timezone_available_at_audit.json`：时区和 `available_at <= decision_time` 候选审计，当前 PASS。
+- `audit_reports/gmsl_manifest.json`：候选 GMSL 表 hash、行数和禁止用途。
+
+验证：
+
+- `leakage_check.py --workers 6` 已扩展到 21 类目录，全部 PASS；新增覆盖 `global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar`。
+
+使用限制：
+
+- GMSL 当前全部属于 `candidate_etl`，`usage_allowed_stage=stress_report_only`。
+- 未通过 vendor/license、时区、session cutoff、PIT、coverage 和 manifest 审计前，不得用于 alpha feature selection、model selection、threshold tuning、exposure increase、leverage increase 或 turnover cap loosening。
+- 海外市场若收盘或供应商发布时间晚于 A 股 T 日 16:00，该记录只能用于下一 A 股决策日。
 
 剩余阻塞：
 

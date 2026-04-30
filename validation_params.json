@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30-r10-s1m-main-s1d-risk-aux",
+  "version": "2026-04-30-r11-gmsl-s1r-risk-execution",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
@@ -9,7 +9,8 @@
     "consensus_audit_r5.md",
     "consensus_audit_r6.md",
     "a_share_quant_strategy_plan_audit_report.md",
-    "consensus_audit_r10.md"
+    "consensus_audit_r10.md",
+    "a_share_quant_strategy_plan_updated_audit_report_20260430.md"
   ],
   "data_governance": {
     "warehouse_build_manifest_required": true,
@@ -25,6 +26,21 @@
       "status",
       "fields",
       "available_at_required",
+      "source_vendor",
+      "license_status",
+      "raw_location",
+      "warehouse_table",
+      "pit_tier",
+      "time_zone",
+      "session_cutoff_rule",
+      "build_script",
+      "schema_hash",
+      "quality_report",
+      "coverage_start",
+      "coverage_end",
+      "update_sla",
+      "known_gaps",
+      "usage_allowed_stage",
       "notes"
     ],
     "source_registry_allowed_availability_buckets": [
@@ -76,14 +92,39 @@
         "quality_flags"
       ]
     },
-    "status_files_are_secondary_to_manifest": true
+    "status_files_are_secondary_to_manifest": true,
+    "gmsl_candidate_manifest_file": "audit_reports/gmsl_manifest.json",
+    "gmsl_timezone_audit_file": "audit_reports/gmsl_timezone_available_at_audit.json",
+    "gmsl_source_fetch_status_file": "audit_reports/gmsl_source_fetch_status.csv",
+    "gmsl_sources_current_status": "candidate_etl_partial_cboe_vix_ovx_gvz_ingested_fred_configured_series_timed_out",
+    "gmsl_must_not_enter_alpha_keep_before_pit_timezone_coverage_audit": true,
+    "gmsl_source_fetch_attempt_status": "2026-04-30_fred_fredgraph_all_configured_series_timed_out_cboe_vix_ovx_gvz_ok",
+    "gmsl_partial_success_sources": [
+      "CBOE_VIX",
+      "CBOE_OVX",
+      "CBOE_GVZ"
+    ],
+    "gmsl_source_registry_names": [
+      "global_energy_prices_p1_5",
+      "global_fx_rates_p1_5",
+      "global_volatility_indices_p1_5",
+      "global_rates_p1_5",
+      "commodity_metals_agri_p1_5",
+      "global_equity_futures_p1_5",
+      "cboe_volatility_indices_p1_5",
+      "geopolitical_event_calendar_p2",
+      "gmsl_shock_state_candidate"
+    ]
   },
   "default_walk_forward": {
     "data_start_date": "2005-01-01",
     "train_window_definition": "rolling_calendar_years_ending_at_train_end",
     "train_window_years": 5,
     "train_window_keep_only": true,
-    "diagnostic_train_window_years": [4, 6],
+    "diagnostic_train_window_years": [
+      4,
+      6
+    ],
     "diagnostic_train_window_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
     "alternate_window_selection_rule": "nested_training_only_before_oot_no_holdout_no_current_oot_feedback",
     "train_window_trading_days_approx": 1260,
@@ -96,14 +137,13 @@
     "actual_oot_step_count_must_be_reported": true,
     "min_oot_steps": 24,
     "min_oot_steps_role": "minimum_acceptance_gate_not_total_walk_forward_count",
-    "purge_days": 40,
     "purge_multiplier": 3,
     "embargo_days": 10,
     "holdout_required": true,
     "holdout_window": "last_12_months",
     "holdout_trading_days_approx": 252,
     "holdout_excluded_from_oot_step_count": true,
-    "train_end_rule": "prediction_start_trade_date_minus_purge_days",
+    "train_end_rule": "prediction_start_trade_date_minus_computed_purge_days",
     "annual_analysis_required": true,
     "market_regime_analysis_required": true,
     "walk_forward_calendar_artifact": "walk_forward_calendar_v1.parquet",
@@ -115,35 +155,62 @@
       "train_start_date",
       "train_end_date",
       "label_horizon",
-      "purge_days",
+      "base_purge_days",
+      "purge_multiplier",
+      "computed_purge_days",
       "embargo_days",
       "label_maturity_date",
       "model_refit_flag",
       "frozen_model_version",
       "holdout_flag"
     ],
-    "prediction_files_must_reference_step_id_and_calendar_hash": true
+    "prediction_files_must_reference_step_id_and_calendar_hash": true,
+    "base_purge_days": 40,
+    "computed_purge_days_rule": "max(label_horizon_trading_days * purge_multiplier, base_purge_days)",
+    "computed_purge_days_examples": {
+      "1": 40,
+      "5": 40,
+      "10": 40,
+      "20": 60
+    }
   },
   "track_profiles": {
     "S1-M": {
       "name": "monthly_selection_baseline",
       "role": "official_p1_alpha_mainline",
-      "primary_label_horizons_trading_days": [20],
-      "secondary_label_horizons_trading_days": [10],
-      "decision_frequency": "monthly_or_21_trading_days",
+      "primary_label_horizons_trading_days": [
+        20
+      ],
+      "secondary_label_horizons_trading_days": [
+        10
+      ],
+      "decision_frequency": "fixed_month_end_or_first_trading_day_after_month_end",
       "rebalance_interval_trading_days": 21,
       "holding_period": "until_next_monthly_rebalance",
       "model_refit_interval_trading_days": 63,
       "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
       "uses_frozen_model_between_refits": true,
       "orders_audit_required": true,
-      "capacity_report_required": true
+      "capacity_report_required": true,
+      "rebalance_calendar_default": "fixed_month_end_or_first_trading_day_after_month_end",
+      "rebalance_calendar_sensitivity": "every_21_trading_days_rolling",
+      "execution_split_required": [
+        "single_day_t_plus_1_open_or_proxy",
+        "split_3_days_equal",
+        "split_5_days_equal"
+      ]
     },
     "S1-D": {
-      "name": "daily_risk_auxiliary_offline",
-      "role": "exploratory_risk_auxiliary_channel",
-      "primary_label_horizons_trading_days": [1, 5],
-      "secondary_label_horizons_trading_days": [10, 20],
+      "name": "daily_risk_execution_mainline",
+      "role": "official_daily_risk_execution_mainline_not_alpha",
+      "primary_label_horizons_trading_days": [
+        1,
+        5
+      ],
+      "secondary_label_horizons_trading_days": [
+        10,
+        20
+      ],
       "decision_frequency": "daily_after_close",
       "rebalance_interval_trading_days": 1,
       "rebalance_interval_role": "offline_diagnostic_not_active_portfolio_rebalance",
@@ -164,19 +231,21 @@
         "risk_signal",
         "alert_state",
         "offline_orders_audit",
-        "daily_turnover_capacity_report"
+        "daily_turnover_capacity_report",
+        "gmsl_shock_state",
+        "execution_aligned_pnl_audit"
       ],
       "turnover_controls": {
         "min_position_overlap_prev_day": 0.85,
         "single_name_daily_delta_cap": 0.02,
-        "single_side_turnover_cap_daily": 0.10,
+        "single_side_turnover_cap_daily": 0.1,
         "turnover_controls_role": "offline_audit_and_future_upgrade_gate"
       },
       "dynamic_ic_turnover": {
         "status": "phase2_report_only_or_tighten_only_until_separate_walk_forward_validation",
-        "base_one_way_turnover_cap": 0.10,
+        "base_one_way_turnover_cap": 0.1,
         "formula": "0.10 * min(max(0.5, trailing_matured_ic / 0.03), 1.5)",
-        "max_effective_cap_before_validation": 0.10,
+        "max_effective_cap_before_validation": 0.1,
         "allowed_effect_before_validation": "tighten_only_or_report_only",
         "ic_input_rule": "trailing_matured_walk_forward_ic_only_after_label_maturity_with_at_least_one_step_lag",
         "forbidden_inputs": [
@@ -184,31 +253,97 @@
           "holdout_ic",
           "unmatured_labels",
           "same_step_label_feedback"
-        ]
+        ],
+        "pre_validation_effective_turnover_cap_formula": "min(base_one_way_turnover_cap, base_one_way_turnover_cap * min(max(0.5, trailing_matured_ic / 0.03), 1.5))",
+        "pre_validation_can_loosen_cap": false,
+        "pre_validation_allowed_effect": "report_only_or_tighten_only",
+        "post_validation_loosen_requires": "s3_preregistered_walk_forward_holdout_cost_capacity_pass"
       },
       "orders_audit_required": true,
       "daily_orders_audit_required": true,
       "daily_turnover_capacity_report_required": true,
-      "cost_sensitivity_multipliers": [1, 2, 3],
-      "minute_or_auction_data_required_for_intraday_execution_claim": true
+      "cost_sensitivity_multipliers": [
+        1,
+        2,
+        3
+      ],
+      "minute_or_auction_data_required_for_intraday_execution_claim": true,
+      "alias": "S1-R",
+      "official_alpha_keep_allowed": false,
+      "risk_execution_mainline": true,
+      "minimum_evidence": {
+        "report_only_matured_daily_decision_days_min": 252,
+        "report_only_calendar_month_bins_min": 12,
+        "tighten_only_matured_daily_decision_days_min": 504,
+        "tighten_only_calendar_month_bins_min": 24,
+        "tighten_only_calendar_quarter_bins_min": 8,
+        "aggregation_required": [
+          "daily",
+          "weekly",
+          "monthly",
+          "quarterly"
+        ],
+        "promotion_uses": "monthly_and_quarterly_aggregated_evidence",
+        "alpha_sleeve_requires": [
+          "audited_minute_or_auction_data",
+          "audited_limit_events",
+          "independent_holdout",
+          "cost_1x_2x_3x_pass",
+          "capacity_explicit_cap",
+          "no_s1m_tail_risk_deterioration"
+        ]
+      },
+      "s1d_block_bootstrap": {
+        "default_block_days": 21,
+        "sensitivity_days": [
+          5,
+          10,
+          21,
+          40
+        ],
+        "promotion_rule": "most_conservative_among_10_21_40"
+      },
+      "production_output_field_policy": {
+        "offline_weight_field": "offline_sim_target_weight",
+        "forbidden_production_order_field": "target_weight",
+        "allowed_risk_overlay_fields": [
+          "risk_overlay_action",
+          "risk_overlay_reason",
+          "max_allowed_participation",
+          "no_buy_flag",
+          "defer_rebalance_flag",
+          "reduce_only_flag"
+        ]
+      }
     },
     "shared_rules": {
       "tracks_are_independent_not_track_a_b": true,
       "s1m_is_official_alpha_mainline": true,
-      "s1d_is_risk_auxiliary_sidecar": true,
       "s1d_oot_or_holdout_must_not_select_s1m": true,
       "same_step_label_feedback_forbidden": true,
       "cross_track_oot_or_holdout_selection_forbidden": true,
       "track_id_required_in_ledger": true,
       "calendar_id_required_in_ledger": true,
-      "panel_hash_required_in_ledger": true
+      "panel_hash_required_in_ledger": true,
+      "s1d_is_daily_risk_execution_mainline_not_alpha": true,
+      "dual_mainline_governance_not_dual_alpha": true,
+      "gmsl_must_not_select_s1m_or_s1d_parameters_from_oot_or_holdout": true
     }
   },
   "label_rules": {
-    "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.purge_days)",
+    "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
     "qant_10d_legacy_note": "Earlier qant deep-dive experiments used purge_days=10 to isolate the known 10-day label leak. New official evidence must use the stricter Round 5/round2 rule max(horizon*3,40) unless a narrower diagnostic run is explicitly labeled as exploratory and excluded from keep decisions.",
-    "purge_sensitivity_days": [40, 60, 80],
-    "purge_sensitivity_bootstrap_block_days": [10, 21, 40]
+    "purge_sensitivity_days": [
+      40,
+      60,
+      80
+    ],
+    "purge_sensitivity_bootstrap_block_days": [
+      10,
+      21,
+      40
+    ],
+    "computed_purge_days_required_in_calendar": true
   },
   "accepted_validation_modes": [
     "chronological_walk_forward",
@@ -245,7 +380,11 @@
     "block_bootstrap_days": 21,
     "block_bootstrap_days_rule": "max(label_horizon_trading_days, default_walk_forward.rebalance_interval_trading_days)",
     "block_bootstrap_days_default_for_20d_label": 21,
-    "block_bootstrap_sensitivity_days": [10, 21, 40],
+    "block_bootstrap_sensitivity_days": [
+      10,
+      21,
+      40
+    ],
     "bootstrap_samples_min": 5000,
     "fdr_required_if_factor_count_gt": 20,
     "holdout_window": "last_12_months",
@@ -264,7 +403,22 @@
       "cvar",
       "limit_lock_cvar",
       "unfilled_sell_exposure"
-    ]
+    ],
+    "holdout_minimum": {
+      "excess_return_after_cost_operator": ">",
+      "excess_return_after_cost_min": 0.0,
+      "sharpe_operator": ">",
+      "sharpe_min": 0.0,
+      "max_drawdown_not_materially_worse_than": [
+        "benchmark",
+        "equal_weight_control"
+      ],
+      "cvar_99_not_materially_worse_than": "equal_weight_control",
+      "single_month_profit_contribution_max": 0.5,
+      "order_failure_cost_capacity_within_preregistered_bounds": true,
+      "gmsl_threshold_or_industry_rule_tuning_from_holdout_forbidden": true
+    },
+    "execution_label_audit_required": true
   },
   "economic_reference_thresholds": {
     "role": "soft_economic_reference_not_replacement_for_hac_bootstrap_holdout_cost_capacity_gates",
@@ -333,7 +487,11 @@
     "new_listing_adv_insufficient_if_listing_age_lt_trading_days": 20,
     "adv_min_valid_bar_ratio": 0.8,
     "bar_absent_amount_policy": "exclude_from_valid_adv_day_count_and_report_separately",
-    "adv_windows_trading_days": [20, 60, 120],
+    "adv_windows_trading_days": [
+      20,
+      60,
+      120
+    ],
     "amount_coverage_report_required": true,
     "crowding_capacity_required": true,
     "crowding_capacity_metrics": [
@@ -361,7 +519,11 @@
       "transfer_fee"
     ],
     "must_disclose_research_assumption_components": true,
-    "cost_sensitivity_multipliers": [1, 2, 3],
+    "cost_sensitivity_multipliers": [
+      1,
+      2,
+      3
+    ],
     "cost_or_benchmark_change_requires_baseline_rerun": true
   },
   "benchmark_audit": {
@@ -426,10 +588,24 @@
     "equal_weight_control_required": true,
     "default_scheme": "row_equal_decay",
     "default_half_life_months": 12,
-    "allowed_half_life_sensitivity_months": [12, 18, 6, 24],
-    "preregistered_keep_sensitivity_half_life_months": [18],
-    "r10_diagnostic_half_life_months": [6, 24],
-    "optional_research_half_life_months": [6, 24, 36],
+    "allowed_half_life_sensitivity_months": [
+      12,
+      18,
+      6,
+      24
+    ],
+    "preregistered_keep_sensitivity_half_life_months": [
+      18
+    ],
+    "r10_diagnostic_half_life_months": [
+      6,
+      24
+    ],
+    "optional_research_half_life_months": [
+      6,
+      24,
+      36
+    ],
     "selection_rule": "default_12m_row_equal_decay_primary; 18m_preregistered_keep_sensitivity; 6m_24m_r10_diagnostic_report_only; 36m_optional_research_grid; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
     "r10_diagnostic_half_life_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
     "sample_weight_formula": "row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))",
@@ -453,7 +629,10 @@
     ],
     "rebalance_interval_trading_days": 21,
     "model_refit_interval_trading_days": 63,
-    "model_refit_sensitivity_intervals_trading_days": [21, 63],
+    "model_refit_sensitivity_intervals_trading_days": [
+      21,
+      63
+    ],
     "predictions_between_refits": "use_latest_frozen_model_version_with_valid_train_end_rule",
     "oot_and_holdout_selection_forbidden": true,
     "report_equal_weight_vs_decay_required": true,
@@ -600,7 +779,16 @@
       "requires_non_stress_period_non_degradation": true,
       "requires_validated_risk_response_before_position_change": true,
       "same_step_oot_or_holdout_feedback_forbidden": true,
-      "human_override_forbidden": true
+      "human_override_forbidden": true,
+      "requires_gmsl_stress_audit": true,
+      "gmsl_can_only_tighten_before_s3_validation": true
+    },
+    "framework": "internal_structural_shift_protocol_plus_geopolitical_macro_shock_layer",
+    "gmsl_required": true,
+    "external_shock_layer": {
+      "status": "candidate_report_only_until_validated",
+      "source": "gmsl",
+      "tighten_only_before_validation": true
     }
   },
   "adaptive_training": {
@@ -640,11 +828,14 @@
       "row_equal_vs_date_balanced_decay_report",
       "holdout_access_log",
       "daily_orders_audit_for_S1-D",
-      "daily_turnover_capacity_report_for_S1-D"
+      "daily_turnover_capacity_report_for_S1-D",
+      "execution_label_audit",
+      "gmsl_source_registry_and_timezone_cutoff_audit"
     ],
     "not_blocking_s1_main_baseline": [
       "optional_adwin_bocpd_diagnostics",
-      "optional_decay_half_life_research_grid_outside_keep_decision"
+      "optional_decay_half_life_research_grid_outside_keep_decision",
+      "gmsl_candidate_source_fetch_completion"
     ]
   },
   "experiment_ledger": {
@@ -674,7 +865,11 @@
       "holdout_burned_flag",
       "crowding_risk_score",
       "limit_lock_cvar",
-      "orders_audit_path"
+      "orders_audit_path",
+      "execution_label_audit_path",
+      "execution_label_id",
+      "gmsl_manifest_hash",
+      "gmsl_shock_state_version"
     ],
     "holdout_access_log_required": true,
     "holdout_burned_flag_required_after_repeated_strategy_selection_use": true,
@@ -683,7 +878,9 @@
   "s1_required_diagnostics": {
     "limit_lock_excluded_ic_comparison_required": true,
     "registration_regime_segment_analysis_required": true,
-    "liquidity_dry_up_day_ic_analysis_required": true
+    "liquidity_dry_up_day_ic_analysis_required": true,
+    "execution_label_audit_required": true,
+    "gmsl_shock_state_report_required": true
   },
   "factor_decay_monitoring": {
     "required_in_s1_report": true,
@@ -691,9 +888,102 @@
     "half_life_definition": "quarters_for_rolling_ic_to_fall_from_peak_to_50_percent",
     "risk_bands": {
       "high_risk_lt_quarters": 4,
-      "medium_risk_quarters": [4, 8],
+      "medium_risk_quarters": [
+        4,
+        8
+      ],
       "low_risk_gt_quarters": 8
     },
     "gate_role": "report_only_not_s1_hard_gate"
+  },
+  "execution_label_audit": {
+    "status": "required_before_factor_keep_or_daily_alpha_claim",
+    "compare_labels": [
+      "close_to_close_adjusted",
+      "t_plus_1_open_or_proxy",
+      "vwap_or_split_execution_proxy"
+    ],
+    "required_metrics": [
+      "correlation",
+      "sign_agreement",
+      "pnl_drift",
+      "cost_drag",
+      "failed_order_carryover"
+    ],
+    "negative_execution_pnl_status_cap": "candidate_or_inconclusive",
+    "outputs_required": [
+      "execution_label_audit_path",
+      "execution_label_id",
+      "execution_aligned_pnl_summary"
+    ]
+  },
+  "gmsl": {
+    "status": "candidate_etl_and_report_only_until_pit_timezone_coverage_audit",
+    "role": "s1_report_item_s1_5_production_audit_s3_tighten_only_candidate",
+    "not_alpha_mainline": true,
+    "can_increase_risk_before_validation": false,
+    "forbidden_before_validation": [
+      "increase_net_exposure",
+      "increase_leverage",
+      "increase_single_name_weight",
+      "increase_industry_concentration",
+      "loosen_turnover_cap",
+      "select_model_or_threshold_from_oot_or_holdout"
+    ],
+    "candidate_tables": [
+      "global_macro_daily",
+      "gmsl_shock_state",
+      "geopolitical_event_calendar"
+    ],
+    "candidate_manifest": "audit_reports/gmsl_manifest.json",
+    "timezone_audit": "audit_reports/gmsl_timezone_available_at_audit.json",
+    "source_fetch_status": "audit_reports/gmsl_source_fetch_status.csv",
+    "shock_states": [
+      "oil_shock",
+      "fx_shock",
+      "global_risk_off",
+      "rate_shock",
+      "commodity_shock",
+      "geopolitical_event_window"
+    ],
+    "minimum_source_audit_fields": [
+      "source_vendor",
+      "license_status",
+      "time_zone",
+      "session_cutoff_rule",
+      "pit_tier",
+      "quality_report",
+      "coverage_start",
+      "coverage_end",
+      "update_sla"
+    ],
+    "report_metrics": [
+      "shock_state_ic_rankic",
+      "shock_state_cost_after_pnl",
+      "shock_state_cvar",
+      "limit_lock_cvar",
+      "order_failure_rate",
+      "industry_exposure",
+      "style_exposure",
+      "cross_asset_correlation",
+      "risk_response_false_positive_cost"
+    ],
+    "source_fetch_attempt_status": "partial_success_cboe_vix_ovx_gvz_ok_fred_configured_series_timed_out",
+    "candidate_table_rows": {
+      "global_macro_daily": 17526,
+      "gmsl_shock_state": 9176,
+      "geopolitical_event_calendar": 0
+    },
+    "source_registry_names": [
+      "global_energy_prices_p1_5",
+      "global_fx_rates_p1_5",
+      "global_volatility_indices_p1_5",
+      "global_rates_p1_5",
+      "commodity_metals_agri_p1_5",
+      "global_equity_futures_p1_5",
+      "cboe_volatility_indices_p1_5",
+      "geopolitical_event_calendar_p2",
+      "gmsl_shock_state_candidate"
+    ]
   }
 }
