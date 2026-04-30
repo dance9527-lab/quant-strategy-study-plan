@@ -1,13 +1,71 @@
 {
-  "version": "2026-04-30-r5",
+  "version": "2026-04-30-r6",
   "scope": "official_strategy_evidence",
   "consensus_sources": [
     "consensus_audit_report_20260430.md",
     "consensus_audit_round2.md",
     "consensus_audit_r3.md",
     "consensus_audit_r4.md",
-    "consensus_audit_r5.md"
+    "consensus_audit_r5.md",
+    "a_share_quant_strategy_plan_audit_report.md"
   ],
+  "data_governance": {
+    "warehouse_build_manifest_required": true,
+    "warehouse_build_manifest_file": "warehouse_build_manifest.json",
+    "warehouse_build_manifest_hash_required": true,
+    "source_registry_file": "external_data_sources.csv",
+    "source_registry_hash_required": true,
+    "data_usage_guide_file": "DATA_USAGE_GUIDE.md",
+    "warehouse_readme_file": "WAREHOUSE_README.md",
+    "source_registry_required_columns": [
+      "source_name",
+      "availability_bucket",
+      "status",
+      "fields",
+      "available_at_required",
+      "notes"
+    ],
+    "source_registry_allowed_availability_buckets": [
+      "available_now",
+      "candidate_etl",
+      "missing",
+      "blocked_by_source_gap"
+    ],
+    "source_registry_statuses_are_secondary_to_availability_bucket": true,
+    "strategy_docs_must_reference_manifest_not_manual_row_counts": true,
+    "features_and_labels_must_be_built_before_training": true,
+    "source_status_field_audit_required": true,
+    "experiment_status_enum": [
+      "candidate",
+      "inconclusive",
+      "keep",
+      "discard",
+      "exploratory_track",
+      "yellow",
+      "red_quarantine",
+      "leakage_failure"
+    ],
+    "source_status_schema_requirements": {
+      "prices_daily_unadjusted": [
+        "source_status"
+      ],
+      "prices_daily_returns": [
+        "source_status"
+      ],
+      "valuation_daily": [
+        "source_status",
+        "field_pit_tier"
+      ],
+      "security_master.equity_master": [
+        "asof_date",
+        "available_at",
+        "decision_time",
+        "source_status",
+        "quality_flags"
+      ]
+    },
+    "status_files_are_secondary_to_manifest": true
+  },
   "default_walk_forward": {
     "data_start_date": "2005-01-01",
     "train_window_definition": "rolling_calendar_years_ending_at_train_end",
@@ -31,7 +89,24 @@
     "holdout_excluded_from_oot_step_count": true,
     "train_end_rule": "prediction_start_trade_date_minus_purge_days",
     "annual_analysis_required": true,
-    "market_regime_analysis_required": true
+    "market_regime_analysis_required": true,
+    "walk_forward_calendar_artifact": "walk_forward_calendar_v1.parquet",
+    "walk_forward_calendar_hash_required": true,
+    "walk_forward_calendar_required_columns": [
+      "step_id",
+      "prediction_start_date",
+      "prediction_end_date",
+      "train_start_date",
+      "train_end_date",
+      "label_horizon",
+      "purge_days",
+      "embargo_days",
+      "label_maturity_date",
+      "model_refit_flag",
+      "frozen_model_version",
+      "holdout_flag"
+    ],
+    "prediction_files_must_reference_step_id_and_calendar_hash": true
   },
   "label_rules": {
     "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.purge_days)",
@@ -56,7 +131,9 @@
     "holdout_window",
     "parameter_perturbation",
     "annual_and_market_regime_stability",
-    "false_discovery_rate_if_factor_count_gt_20"
+    "false_discovery_rate_if_factor_count_gt_20",
+    "test_family_ledger",
+    "holdout_access_log"
   ],
   "s1_acceptance_gate": {
     "gate_logic": "hard_gate_all_required",
@@ -77,11 +154,27 @@
     "fdr_required_if_factor_count_gt": 20,
     "holdout_window": "last_12_months",
     "holdout_sharpe_min": 0.0,
+    "holdout_sharpe_operator": ">",
+    "holdout_sharpe_must_be_positive": true,
     "holdout_direction_consistent": true,
-    "annual_turnover_max": 3.0,
     "cost_after_excess_return_positive": true,
     "capacity_report_required": true,
-    "limit_lock_report_required": true
+    "limit_lock_report_required": true,
+    "executable_pnl_gate_required": true,
+    "executable_pnl_gate_logic": "cost_capacity_order_failure_and_benchmark_adjusted_excess_return_must_be_positive",
+    "tail_risk_fatal_check_required": true,
+    "tail_risk_fatal_metrics": [
+      "max_drawdown",
+      "cvar",
+      "limit_lock_cvar",
+      "unfilled_sell_exposure"
+    ]
+  },
+  "s1_soft_floor": {
+    "annual_turnover_max": 3.0,
+    "annual_turnover_role": "soft_floor_not_hard_gate",
+    "annual_and_market_regime_stability_required": true,
+    "complex_models_must_beat_simple_baselines": true
   },
   "data_gap_policy": {
     "valuation_daily_2026_gap": {
@@ -98,6 +191,37 @@
       ],
       "sensitivity_required": true,
       "report_missing_mask_required": true
+    },
+    "valuation_field_tiers": {
+      "market_available_slow_variables": [
+        "total_mv",
+        "circ_mv",
+        "float_share",
+        "turnover_rate"
+      ],
+      "financial_or_vendor_derived_fields_require_announcement_pit_audit": [
+        "pe",
+        "pe_ttm",
+        "pb",
+        "ps",
+        "ps_ttm",
+        "roe",
+        "net_profit_growth"
+      ],
+      "market_only_baseline_required_before_valuation_fundamental_keep": true
+    },
+    "corporate_actions_total_return_audit": {
+      "status": "required_parallel_data_audit",
+      "blocks_total_return_claim": true,
+      "does_not_block_market_only_s1_baseline": true,
+      "required_fields": [
+        "ex_rights_date",
+        "record_date",
+        "cash_dividend",
+        "bonus_share",
+        "rights_issue",
+        "announcement_time"
+      ]
     }
   },
   "capacity_policy": {
@@ -107,7 +231,17 @@
     "adv_min_valid_bar_ratio": 0.8,
     "bar_absent_amount_policy": "exclude_from_valid_adv_day_count_and_report_separately",
     "adv_windows_trading_days": [20, 60, 120],
-    "amount_coverage_report_required": true
+    "amount_coverage_report_required": true,
+    "crowding_capacity_required": true,
+    "crowding_capacity_metrics": [
+      "factor_top_bottom_decile_overlap",
+      "factor_return_turnover_correlation",
+      "left_tail_skew_cvar",
+      "limit_down_unfilled_sell_ratio",
+      "target_trade_value_to_market_amount",
+      "style_deleveraging_pressure_proxy"
+    ],
+    "self_participation_rate_is_not_sufficient_capacity_evidence": true
   },
   "benchmark_audit": {
     "coverage_assets_report_required": true,
@@ -169,13 +303,26 @@
   "training_weighting": {
     "status": "r5_single_track_weighting_policy",
     "equal_weight_control_required": true,
-    "default_scheme": "exponential_decay",
+    "default_scheme": "row_equal_decay",
     "default_half_life_months": 12,
     "allowed_half_life_sensitivity_months": [12, 18],
     "optional_research_half_life_months": [6, 24, 36],
-    "selection_rule": "default_12m_primary_and_18m_preregistered_sensitivity; any alternate half_life_must_be_selected_by_nested_training_only_not_oot_or_holdout",
-    "sample_weight_formula": "weight = 2 ** (-age_trading_days / (half_life_months * 21))",
+    "selection_rule": "default_12m_row_equal_decay_primary_and_18m_preregistered_sensitivity; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
+    "sample_weight_formula": "row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))",
+    "required_weighting_schemes": [
+      "equal_weight_5y_control",
+      "row_equal_decay",
+      "date_balanced_decay"
+    ],
+    "date_balanced_decay_formula": "row_weight_i_t = 2 ** (-age_trading_days_t / (half_life_months * 21)) / n_assets_t",
     "weight_normalization": "normalize_within_each_training_step_mean_1",
+    "weight_reports_required": [
+      "effective_sample_size",
+      "date_weight_distribution",
+      "asset_count_by_date",
+      "per_date_total_weight",
+      "row_equal_vs_date_balanced_result_delta"
+    ],
     "supported_interfaces_required": [
       "sample_weight_for_sklearn_lightgbm_xgboost",
       "weighted_regression_or_explicit_weighted_loss_for_linear_models"
@@ -185,29 +332,78 @@
     "model_refit_sensitivity_intervals_trading_days": [21, 63],
     "predictions_between_refits": "use_latest_frozen_model_version_with_valid_train_end_rule",
     "oot_and_holdout_selection_forbidden": true,
-    "report_equal_weight_vs_decay_required": true
+    "report_equal_weight_vs_decay_required": true,
+    "oot_or_holdout_selection_of_weighting_scheme_forbidden": true
   },
   "universe_audit": {
     "required_before_panel_keep": true,
     "default_universe": "universe_daily.in_factor_research_universe",
+    "default_universe_role": "entry_eligible_universe_proxy_not_full_research_observable_universe",
     "known_rule": "can_trade_close_based AND listing_age_trading_days >= 60 AND NOT is_risk_warning_pit",
+    "required_universe_layers": {
+      "research_observable_universe": "listed_and_bar_present_and_basic_lifecycle_quality; do_not_drop_limit_up_down_risk_samples_for_ic",
+      "entry_eligible_universe": "t_plus_1_buy_candidate_with_st_listing_age_adv_capacity_and_limit_pressure_constraints",
+      "execution_accounting_universe": "order_state_accounting_for_limit_lock_suspension_delay_and_unlock_returns"
+    },
     "must_confirm": [
       "no_current_stock_list_backfill_for_history",
       "st_suspend_limit_fields_are_point_in_time_or_disclosed_as_source_gap",
       "historical_delisted_assets_are_not_dropped",
       "available_at_and_decision_time_are_not_after_execution_time",
-      "universe_rule_version_or_source_hash_is_recorded"
+      "universe_rule_version_or_source_hash_is_recorded",
+      "research_observable_universe_not_equal_to_entry_eligible_universe",
+      "limit_lock_samples_not_silently_removed_from_risk_diagnostics"
     ]
   },
   "institutional_risk_checks": {
     "limit_up_down_exclusion_ic_comparison": true,
     "registration_reform_period_break_analysis": true,
     "liquidity_dry_up_stress_ic_analysis": true,
-    "stress_windows_must_be_preregistered": true
+    "stress_windows_must_be_preregistered": true,
+    "stress_slices_cannot_select_models_or_parameters": true,
+    "pre_registered_regime_map": [
+      {
+        "name": "star_market_registration_after",
+        "start": "2019-07-22",
+        "role": "diagnostic"
+      },
+      {
+        "name": "chi_next_registration_after",
+        "start": "2020-08-24",
+        "role": "diagnostic"
+      },
+      {
+        "name": "beijing_stock_exchange_after",
+        "start": "2021-11-15",
+        "role": "diagnostic"
+      },
+      {
+        "name": "full_registration_system_after",
+        "start": "2023-02-17",
+        "role": "csrp_production_gate"
+      },
+      {
+        "name": "quant_crowding_stress_2024q1",
+        "start": "2024-01-01",
+        "end": "2024-03-31",
+        "role": "stress_diagnostic"
+      },
+      {
+        "name": "new_nine_guidelines_after",
+        "start": "2024-04-12",
+        "role": "csrp_production_gate"
+      },
+      {
+        "name": "program_trading_regulation_after",
+        "start": "2024-10-08",
+        "role": "diagnostic"
+      }
+    ]
   },
   "concept_shift": {
-    "status": "required_data_driven_diagnostic_only",
+    "status": "required_data_driven_diagnostic_and_csrp_production_gate",
     "does_not_replace_single_track_baseline": true,
+    "s1_hard_gate_relaxation_allowed": false,
     "default_response": "no_same_step_model_switch_alpha_change_or_threshold_change",
     "shift_types": [
       "covariate_shift",
@@ -270,7 +466,18 @@
       ]
     },
     "oot_segment_role": "descriptive_report_only_not_statistical_keep_gate",
-    "alert_role": "diagnostic_and_quarantine_state_not_standalone_keep_gate"
+    "alert_role": "diagnostic_and_quarantine_state_not_standalone_keep_gate",
+    "csrp_production_gate": {
+      "required_before_deployable_claim": true,
+      "blocks_production_not_s1_research_baseline": true,
+      "requires_structural_regime_report": true,
+      "requires_crowding_capacity_report": true,
+      "requires_row_equal_vs_date_balanced_weight_report": true,
+      "requires_non_stress_period_non_degradation": true,
+      "requires_validated_risk_response_before_position_change": true,
+      "same_step_oot_or_holdout_feedback_forbidden": true,
+      "human_override_forbidden": true
+    }
   },
   "adaptive_training": {
     "status": "deprecated_by_r5",
@@ -293,7 +500,10 @@
   "s1_preconditions": {
     "blocking_before_s1_main_evidence": [
       "universe_daily_construction_audit",
+      "warehouse_build_manifest_hash",
+      "source_registry_hash",
       "walk_forward_calendar_with_actual_oot_step_count",
+      "walk_forward_calendar_hash",
       "train_cutoff_purge_embargo_validation",
       "validation_params_hash"
     ],
@@ -301,12 +511,39 @@
       "valuation_gap_sensitivity_for_valuation_features",
       "benchmark_coverage_assets_audit",
       "adv_insufficient_new_listing_flags",
-      "equal_weight_control_vs_exponential_decay_report"
+      "equal_weight_control_vs_exponential_decay_report",
+      "row_equal_vs_date_balanced_decay_report",
+      "holdout_access_log"
     ],
     "not_blocking_s1_main_baseline": [
       "optional_adwin_bocpd_diagnostics",
       "optional_decay_half_life_research_grid_outside_keep_decision"
     ]
+  },
+  "experiment_ledger": {
+    "required_fields": [
+      "warehouse_build_manifest_hash",
+      "walk_forward_calendar_hash",
+      "source_registry_hash",
+      "validation_params_hash",
+      "test_family_id",
+      "hypothesis_family",
+      "trial_index_in_family",
+      "total_trials_in_family",
+      "selection_path",
+      "pre_registered_or_exploratory",
+      "date_weighting_scheme",
+      "half_life_months",
+      "universe_rule_version",
+      "holdout_access_count",
+      "holdout_burned_flag",
+      "crowding_risk_score",
+      "limit_lock_cvar",
+      "orders_audit_path"
+    ],
+    "holdout_access_log_required": true,
+    "holdout_burned_flag_required_after_repeated_strategy_selection_use": true,
+    "stress_slice_selection_forbidden": true
   },
   "s1_required_diagnostics": {
     "limit_lock_excluded_ic_comparison_required": true,

@@ -1,0 +1,86 @@
+{
+  "manifest_version": "2026-04-30-r1",
+  "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_20260429_074305_doc_snapshot_r6",
+  "purpose": "strategy_document_data_fact_manifest",
+  "canonical_warehouse": "D:\\data\\warehouse",
+  "generated_for_repo": "D:\\quantum_a0\\quant-strategy-study-plan",
+  "source_reports": {
+    "base_lineage_manifest": {
+      "path": "D:\\data\\warehouse\\lineage_manifest\\warehouse_build_20260429_021444.json",
+      "sha256": "F1BB61D427F41084AC12A37BBA1F7B0A7D23040B33B054EAAEB6A2AA11BE29C9"
+    },
+    "leakage_check_report": {
+      "path": "D:\\data\\warehouse\\audit_reports\\leakage_check_report.json",
+      "checked_at": "2026-04-29 10:38:49",
+      "sha256": "688787531138DCD82195DEC2809BFB200D09071DC7A9CD5A60AFB722AEFBC654"
+    },
+    "p1_data_preconditions_build_summary": {
+      "path": "D:\\data\\warehouse\\audit_reports\\p1_data_preconditions_build_summary.json",
+      "started_at": "2026-04-29 07:43:05",
+      "sha256": "99B1D4C7A249243DD24ACFADDE34475D8057ADB440CF3522D4EBE39EF77857D5"
+    },
+    "p1_data_preconditions_validation": {
+      "path": "D:\\data\\warehouse\\audit_reports\\p1_data_preconditions_validation.json",
+      "checked_at": "2026-04-29 07:48:44",
+      "sha256": "483E1DFF05D89064766660FF71B1E5C7B6C9053F9C5585F585A07CF257BEA34D"
+    }
+  },
+  "table_snapshot": {
+    "max_data_date": "2026-04-27",
+    "prices_daily_unadjusted_rows": 17599789,
+    "prices_daily_returns_rows": 17599789,
+    "valuation_daily_rows": 16642794,
+    "benchmarks_rows": 31229,
+    "reference_rates_rows": 55964,
+    "tradability_daily_rows": 18177689,
+    "tradability_daily_enriched_rows": 18177689,
+    "universe_daily_rows": 18177689,
+    "risk_warning_daily_rows": 8973264,
+    "suspension_events_rows": 77077,
+    "industry_classification_rows": 113684,
+    "risk_warning_events_rows": 13142,
+    "exchange_calendar_rows": 39486,
+    "trading_costs_rows": 23,
+    "index_membership_rows": 3600
+  },
+  "source_status_summary": {
+    "availability_bucket_policy": "external_data_sources.csv availability_bucket is canonical for strategy planning: available_now, candidate_etl, missing, blocked_by_source_gap",
+    "reference_rates": "govt_bond_and_shibor_ingested_with_fixed_fallback",
+    "benchmarks": "internal_proxy_plus_akshare_csindex_official_prices",
+    "pit_industry_classification": "akshare_cninfo_ingested_with_coverage_gaps",
+    "official_suspension_events": "akshare_baidu_recent_partial_2023_to_2026_not_full_history",
+    "risk_warning_daily": "szse_dated_short_name_changes_plus_current_snapshot; sh_bj_history_gap",
+    "index_membership": "latest_snapshot_not_historical_pit",
+    "features": "status_placeholder_only",
+    "labels": "status_placeholder_only",
+    "corporate_actions": "missing_independent_main_table",
+    "candidate_etl_sources": "margin_trading, northbound, restricted_share_unlock, market_breadth_limit_pressure, etf_flow, index_futures_basis_oi, fundamentals, analyst_expectations, shareholder_pledge_lhb_block_trade, minute_execution, chip_daily, limit_events, option_minute, news_events",
+    "blocked_by_source_gap_sources": "corporate_action_vendor_or_exchange, historical_st_events_sh_bj, official_suspension_events_full_history, index_components_historical_pit"
+  },
+  "validation_status": {
+    "leakage_check_pass": true,
+    "p1_preconditions_pass": true,
+    "duplicate_key_checks_pass": true,
+    "cost_source_split_pass": true,
+    "shibor_reference_rates_present": true
+  },
+  "must_disclose_gaps": [
+    "features_and_labels_not_yet_built",
+    "valuation_daily_2026_gap_2026-01-05_to_2026-02-05",
+    "valuation_financial_fields_need_announcement_date_pit_audit",
+    "corporate_actions_total_return_audit_missing",
+    "sh_bj_historical_st_events_missing",
+    "full_official_suspension_archive_missing",
+    "historical_pit_index_membership_missing",
+    "exchange_calendar_is_unified_proxy_not_verified_three_exchange_history",
+    "cost_model_contains_research_assumptions_for_commission_slippage_impact"
+  ],
+  "usage_rules": {
+    "strategy_docs_must_reference_manifest_hash": true,
+    "manual_row_counts_are_not_authoritative": true,
+    "external_data_sources_are_registration_not_availability": true,
+    "current_index_membership_snapshot_must_not_be_backfilled": true,
+    "current_stock_list_must_not_filter_history": true,
+    "return_adjusted_pit_is_adjusted_return_proxy_until_corporate_actions_audit": true
+  }
+}
