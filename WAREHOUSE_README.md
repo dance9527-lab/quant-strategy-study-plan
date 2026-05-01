@@ -47,7 +47,7 @@ source registry 命名边界：
 
 当前执行边界:
 
-- P1 market-only 因子库已经足以进入 S1-M/S1-D/S1-R 研究准备，但正式 S1 evidence 仍阻塞于 `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账、factor library registry、benchmark/universe audit、execution label audit 和 orders/capacity audit。
+- P1 market-only 因子库已经足以进入 S1-M/S1-D 研究准备，但正式 S1 evidence 仍阻塞于 `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账、factor library registry、benchmark/universe audit、execution label audit 和 orders/capacity audit。
 - GMSL 当前只完成 Cboe VIX/OVX/GVZ partial candidate；FRED 能源、汇率、利率和全球股指仍超时或待接入。GMSL 只能 `stress_report_only`，不能进入 alpha feature selection、model selection、threshold tuning 或任何放宽风险的规则。
 - `is_delisted` 和历史证券补全只能证明退市样本存在；退市日期、退市前收益处理、当前列表外历史证券保留和三层 universe 仍需 `survivorship_bias_audit` / `universe_daily_construction_audit`。
 - ROE、毛利率、盈利稳定性等基本面质量因子只作为 P2 explainability 候选；公告日、报告期、重述版本和供应商计算时点 PIT 审计前不得进入 keep。
@@ -313,11 +313,11 @@ source registry 命名边界：
 
 优先补充：
 
-1. A0.1 governance（预计 2-3 周，阻塞 S1 启动）：生成 `track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计，所有产物写入 hash，并绑定 `warehouse_build_manifest.json`、source registry 和 `validation_params.json`。
-2. A0.2 keep governance / executable PnL audit（预计 3-6 周，阻塞 S1 keep）：生成 `holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、SQLite WAL `experiment_ledger`、`execution_label_audit`、`execution_audit/orders_audit` 和 `daily_turnover_capacity_report`；先使用日频 open/amount/tradability 的 L1 代理，字段使用 `offline_sim_target_weight`，orders audit 至少含 `execution_price`、`execution_slippage`、`order_status`，禁止把 `target_weight` 接入生产订单接口。`holdout_access_log.tsv` 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；holdout 一旦被用于策略选择即 burned，生产前需新增不少于 252 个交易日 shadow/forward OOS。日频 L1 执行审计必须输出 square-root impact model 代理结果。
+1. A0.1 governance（阻塞 S1 启动）：生成 `track_registry_v1`、`walk_forward_calendar_S1M_v1`、S1-D calendar skeleton、`WalkForwardCalendarValidator`、`source_registry_conditional_completeness_report`、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计，所有产物写入 hash，并绑定 `warehouse_build_manifest.json`、source registry 和 `validation_params.json`。
+2. A0.2 keep governance / executable PnL audit（阻塞 S1 keep）：生成 `holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、SQLite WAL `experiment_ledger`、`execution_label_audit`、`execution_audit/orders_audit` 和 `daily_turnover_capacity_report`；先使用日频 open/amount/tradability 的 L1 代理，字段使用 `offline_sim_target_weight`，orders audit 至少含 `order_id`、`signal_date`、`execution_date`、`intended_shares`、`rounded_shares`、`fill_price`、`execution_slippage`、`order_status`、`no_trade_reason`、`carryover_position`、`cash_idle`，禁止把 `target_weight` 接入生产订单接口。`holdout_access_log.tsv` 最小字段为 timestamp、operator、purpose、run_id、track_id、module_id、label_id、label_scope、evidence_role、calendar_id、panel_hash、execution_rule_id、risk_rule_id、validation_params_hash、data_range、result_summary、result_artifact_hash、decision_or_read_only、pollution_flag 和 followup_action；holdout 一旦被用于策略选择即 burned，生产前需新增不少于 252 个交易日 shadow/forward OOS。日频 L1 执行审计必须输出 square-root impact model 代理结果。
 3. P1 total-return：补官方或授权公司行为主表，统一公告日、登记日、除权除息日、现金分红、送转配字段，并与当前 sanity reference 和 adjusted-vs-raw 样本交叉校验。
 4. P1 execution data：补 `limit_events`、`prices_minute` 和集合竞价/开盘成交明细；清洗时必须区分盘中可见字段与盘后统计字段，并输出 PIT、coverage、timezone/session cutoff 和成交失败审计。
-5. P1/P1.5 flows and GMSL：融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI 和 GMSL 替代源均先做 candidate ETL；GMSL-v1 只用 Cboe VIX/OVX/GVZ、国债收益率和 Shibor 做 partial stress report，GMSL-v2 才补完整外生冲击层；FRED 超时源需 fredapi、Nasdaq Data Link/Quandl、vendor mirror 或替代下载策略。
+5. P1/P1.5 flows and GMSL：融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI 和 GMSL 替代源均先做 candidate ETL；当前 `GMSL-v0` 只用 Cboe VIX/OVX/GVZ 和现有 reference rates 框架做 partial stress report，`GMSL-v1` 才补能源、FX、利率、全球股指/期货和商品，`GMSL-v2` 再补地缘事件、onshore 夜盘、flows、basis/OI 和市场宽度；FRED 超时源需 fredapi、Nasdaq Data Link/Quandl、vendor mirror 或替代下载策略。
 6. Schema registry hygiene：补登记 `corporate_actions`、治理产物、`limit_events`、`prices_minute/auction` 的 schema；清理 GMSL schema 描述中的乱码或不可读字段说明，并把 schema hash 写回 manifest/source registry。
 7. P2 explainability：财报公告日、ROE、毛利率、盈利稳定性、现金流质量、分析师预期、股东户数、质押、龙虎榜、大宗交易、新闻事件等只在 Step 1-4 稳定后立项；公告日、报告期、重述版本和供应商计算时点 PIT 未审计前只做候选解释力，不进入 keep。
 

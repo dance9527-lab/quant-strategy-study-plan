@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-01-final-review-v2-execution-hardening",
+  "version": "2026-05-01-a-share-final-review-execution-hardening",
   "scope": "official_strategy_evidence",
   "parameter_basis": [
     "quant_strategy_plan.md",
@@ -123,6 +123,20 @@
     "feature_label_panel_manifest_file": "audit_reports/feature_label_panel_v1_manifest.json",
     "pit_feature_audit_file": "audit_reports/pit_feature_audit_market_daily_v1.json",
     "label_audit_file": "audit_reports/label_audit_forward_returns_v1.json",
+    "feature_panel_hash_definition": "sha256 over ordered feature parquet file hashes from feature_label_panel_v1_manifest plus schema_registry_hash and feature_build_script_hash",
+    "label_panel_hash_definition": "sha256 over ordered label parquet file hashes from feature_label_panel_v1_manifest plus label_definition_id and label_audit_hash",
+    "panel_hash_definition": "sha256(feature_panel_hash + label_panel_hash + universe_rule_version + calendar_id + label_scope + evidence_role + execution_rule_id + risk_rule_id_or_none)",
+    "panel_hash_input_order_fixed": [
+      "feature_panel_hash",
+      "label_panel_hash",
+      "universe_rule_version",
+      "calendar_id",
+      "label_scope",
+      "evidence_role",
+      "execution_rule_id",
+      "risk_rule_id_or_none"
+    ],
+    "panel_hash_serialization": "utf8_json_with_sorted_keys_no_whitespace_or_tsv_single_line_with_tab_separator",
     "source_status_field_audit_required": true,
     "source_status_field_audit_status": "required_columns_present",
     "source_status_audit_file": "audit_reports/source_status_audit_r7.json",
@@ -256,25 +270,46 @@
     "walk_forward_calendar_hash_required": true,
     "walk_forward_calendar_required_columns": [
       "step_id",
+      "track_id",
+      "module_id",
+      "subtrack_id",
+      "calendar_id",
       "prediction_start_date",
       "prediction_end_date",
       "train_start_date",
       "train_end_date",
+      "label_id",
       "label_horizon",
+      "label_scope",
+      "evidence_role",
+      "label_definition_id",
       "base_purge_days",
       "purge_multiplier",
       "computed_purge_days",
+      "computed_purge_days_source",
       "embargo_days",
       "label_maturity_date",
+      "decision_frequency",
+      "rebalance_interval",
+      "holding_period",
+      "execution_rule_id",
+      "risk_rule_id",
+      "risk_rule_version",
+      "risk_rule_hash",
+      "panel_hash",
+      "feature_panel_hash",
+      "label_panel_hash",
       "model_refit_flag",
       "frozen_model_version",
-      "holdout_flag"
+      "holdout_flag",
+      "holdout_burned_flag",
+      "alpha_keep_allowed"
     ],
     "prediction_files_must_reference_step_id_and_calendar_hash": true,
     "base_purge_days": 40,
-    "computed_purge_days_rule": "track_and_label_specific; alpha keep uses max(label_horizon_trading_days * purge_multiplier, base_purge_days); S1-D/S1-R 1d risk/execution report uses 20 trading days with 10/20/40 sensitivity and cannot support alpha keep by itself",
+    "computed_purge_days_rule": "track_module_label_scope_specific; alpha keep uses max(label_horizon_trading_days * purge_multiplier, base_purge_days); S1-D risk_execution_report_only 1d labels use 20 trading days with 10/20/40 sensitivity and cannot support alpha keep by themselves",
     "computed_purge_days_examples": {
-      "S1-D_or_S1-R_1d_risk_execution_report": 20,
+      "S1-D_1d_risk_execution_report": 20,
       "generic_alpha_keep_1d": 40,
       "5": 40,
       "10": 40,
@@ -328,6 +363,24 @@
       "daily_refit_allowed_only_as_preregistered_sensitivity": true,
       "s1d_function": "daily_signal_and_risk_monitoring_using_frozen_model_outputs",
       "s1r_function": "rebalancing_execution_and_order_risk_audit_using_more_conservative_rules",
+      "track_identity_policy": "single_track_with_modules",
+      "canonical_track_id": "S1-D",
+      "module_id_required": true,
+      "subtrack_id_optional": true,
+      "module_ids": [
+        "diagnostics",
+        "execution_audit",
+        "risk_response_candidate"
+      ],
+      "subtrack_aliases": {
+        "S1-R": "execution_audit_and_risk_response_candidate_modules_under_track_id_S1-D"
+      },
+      "module_id_counts_toward_same_test_family": true,
+      "subtrack_alias_must_not_create_separate_fdr_family": true,
+      "risk_rule_id_required_for_module_ids": [
+        "risk_response_candidate"
+      ],
+      "risk_rule_hash_required_for_tighten_only": true,
       "s1r_may_only_tighten_s1d_outputs_before_validation": true,
       "execution_rule_id": "t_close_signal_t_plus_1_execution_daily_l1",
       "uses_frozen_model_between_refits": true,
@@ -394,7 +447,6 @@
         3
       ],
       "minute_or_auction_data_required_for_intraday_execution_claim": true,
-      "alias": "S1-R",
       "official_alpha_keep_allowed": false,
       "risk_execution_mainline": true,
       "minimum_evidence": {
@@ -448,6 +500,8 @@
       "same_step_label_feedback_forbidden": true,
       "cross_track_oot_or_holdout_selection_forbidden": true,
       "track_id_required_in_ledger": true,
+      "module_id_required_in_ledger": true,
+      "subtrack_id_must_not_override_track_id": true,
       "calendar_id_required_in_ledger": true,
       "panel_hash_required_in_ledger": true,
       "s1d_is_daily_risk_execution_mainline_not_alpha": true,
@@ -457,15 +511,127 @@
   },
   "label_rules": {
     "alpha_keep_purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
-    "s1d_s1r_1d_risk_execution_purge_days": 20,
-    "s1d_s1r_1d_purge_sensitivity_days": [
+    "label_scope_required": true,
+    "evidence_role_required": true,
+    "computed_purge_days_source_required": true,
+    "alpha_keep_allowed_field_required": true,
+    "evidence_role_enum": [
+      "alpha_keep",
+      "risk_execution_report",
+      "execution_misalignment_audit",
+      "risk_alert_report",
+      "offline_orders_audit",
+      "stress_report_only",
+      "diagnostic_only"
+    ],
+    "label_scope_evidence_role_matrix": {
+      "risk_execution_report_only": {
+        "allowed_evidence_roles": [
+          "risk_execution_report",
+          "execution_misalignment_audit",
+          "risk_alert_report",
+          "offline_orders_audit",
+          "stress_report_only",
+          "diagnostic_only"
+        ],
+        "forbidden_evidence_roles": [
+          "alpha_keep"
+        ],
+        "alpha_keep_allowed": false
+      },
+      "generic_alpha_or_any_keep_claim": {
+        "allowed_evidence_roles": [
+          "alpha_keep",
+          "diagnostic_only"
+        ],
+        "alpha_keep_role_requires_alpha_keep_allowed_true": true
+      }
+    },
+    "explicit_label_purge_bindings": [
+      {
+        "track_id": "S1-D",
+        "label_scope": "risk_execution_report_only",
+        "label_ids": [
+          "excess_ret_1d",
+          "rank_ret_1d",
+          "top_quantile_1d"
+        ],
+        "label_horizon_trading_days": 1,
+        "computed_purge_days": 20,
+        "computed_purge_days_source": "s1d_1d_risk_execution_report_only_special_rule",
+        "alpha_keep_allowed": false
+      },
+      {
+        "label_scope": "generic_alpha_or_any_keep_claim",
+        "label_horizon_trading_days": 1,
+        "computed_purge_days": 40,
+        "computed_purge_days_source": "max_horizon_times_three_or_base_40",
+        "alpha_keep_allowed": true
+      },
+      {
+        "label_scope": "generic_alpha_or_any_keep_claim",
+        "label_horizon_trading_days": 5,
+        "computed_purge_days": 40,
+        "computed_purge_days_source": "max_horizon_times_three_or_base_40",
+        "alpha_keep_allowed": true
+      },
+      {
+        "label_scope": "generic_alpha_or_any_keep_claim",
+        "label_horizon_trading_days": 20,
+        "computed_purge_days": 60,
+        "computed_purge_days_source": "max_horizon_times_three_or_base_40",
+        "alpha_keep_allowed": true
+      }
+    ],
+    "label_scopes": {
+      "risk_execution_report_only": {
+        "allowed_track_id": "S1-D",
+        "allowed_module_ids": [
+          "diagnostics",
+          "execution_audit",
+          "risk_response_candidate"
+        ],
+        "one_day_label_ids": [
+          "excess_ret_1d",
+          "rank_ret_1d",
+          "top_quantile_1d"
+        ],
+        "computed_purge_days": 20,
+        "sensitivity_days": [
+          10,
+          20,
+          40
+        ],
+        "allowed_use": [
+          "short_horizon_ic",
+          "execution_misalignment",
+          "risk_alert_report",
+          "offline_orders_audit"
+        ],
+        "forbidden_use": [
+          "alpha_keep",
+          "active_rebalance_keep",
+          "oot_or_holdout_threshold_selection"
+        ],
+        "alpha_keep_allowed": false
+      },
+      "generic_alpha_or_any_keep_claim": {
+        "one_day_label_purge_days": 40,
+        "five_day_label_purge_days": 40,
+        "twenty_day_label_purge_days": 60,
+        "rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
+        "alpha_keep_allowed": true
+      }
+    },
+    "s1d_1d_risk_execution_purge_days": 20,
+    "s1d_1d_purge_sensitivity_days": [
       10,
       20,
       40
     ],
-    "s1d_s1r_1d_purge_role": "risk_execution_report_and_misalignment_audit_only_not_alpha_keep",
-    "purge_days_min_rule": "alpha keep uses max(horizon*3,40); S1-D/S1-R 1d risk/execution report uses 20 with 10/20/40 sensitivity",
-    "qant_10d_legacy_note": "Historical qant diagnostic experiments may use purge_days=10 only when explicitly labeled exploratory and excluded from keep decisions. New official alpha keep evidence must use max(horizon*3,40); S1-D/S1-R 1d risk/execution report uses its separate 20-day rule.",
+    "s1d_1d_purge_role": "risk_execution_report_and_misalignment_audit_only_not_alpha_keep",
+    "purge_days_min_rule": "alpha keep uses max(horizon*3,40); S1-D risk_execution_report_only 1d labels use 20 with 10/20/40 sensitivity",
+    "qant_10d_legacy_note": "Historical qant diagnostic experiments may use purge_days=10 only when explicitly labeled exploratory and excluded from keep decisions. New official alpha keep evidence must use max(horizon*3,40); S1-D risk_execution_report_only 1d labels use their separate 20-day rule.",
     "purge_sensitivity_days": [
       40,
       60,
@@ -1267,13 +1433,15 @@
       "walk_forward_calendar_with_actual_oot_step_count",
       "WalkForwardCalendarValidator",
       "walk_forward_calendar_hash",
+      "source_registry_conditional_completeness_report",
       "train_cutoff_purge_embargo_validation",
       "validation_params_hash",
       "universe_daily_construction_audit",
       "survivorship_bias_audit",
       "valuation_coverage_audit",
       "suspension_precision_recall_audit",
-      "valuation_available_at_sample_audit"
+      "valuation_available_at_sample_audit",
+      "experiment_stage_not_sandbox"
     ],
     "blocking_before_factor_keep": [
       "valuation_gap_sensitivity_for_valuation_features",
@@ -1295,7 +1463,16 @@
       "optional_adwin_bocpd_diagnostics",
       "optional_decay_half_life_research_grid_outside_keep_decision",
       "gmsl_candidate_source_fetch_completion"
-    ]
+    ],
+    "experiment_stage_enum": [
+      "sandbox_prototype",
+      "official_s1_start_allowed",
+      "official_s1_keep_eligible",
+      "shadow_forward_oos",
+      "production_candidate"
+    ],
+    "a0_1_missing_stage": "sandbox_prototype",
+    "a0_2_missing_restriction": "ic_sharpe_topn_segmented_results_must_not_enter_official_summary_or_external_presentation"
   },
   "data_warehouse_supplement_plan": {
     "status": "planned_requires_explicit_execution_instruction",
@@ -1306,7 +1483,9 @@
         "artifacts": [
           "track_registry_v1",
           "walk_forward_calendar_S1M_v1",
+          "walk_forward_calendar_S1D_skeleton",
           "WalkForwardCalendarValidator",
+          "source_registry_conditional_completeness_report",
           "validation_params_hash",
           "universe_daily_construction_audit",
           "valuation_coverage_audit",
@@ -1315,7 +1494,6 @@
         ],
         "purpose": "make S1-M startup calendar and basic sample boundaries reproducible",
         "phase": "A0.1_blocks_s1_start",
-        "work_estimate": "2_to_3_weeks_total_for_A0_1_governance_subset",
         "blocks": [
           "official_s1_start",
           "official_s1_main_evidence"
@@ -1336,14 +1514,24 @@
         ],
         "purpose": "separate close-to-close IC labels from executable account PnL and make keep decisions auditable",
         "phase": "A0.2_blocks_s1_keep",
-        "work_estimate": "3_to_6_weeks_total_for_A0_2_execution_and_ledger_subset",
         "holdout_access_log_min_fields": [
           "timestamp",
           "operator",
           "purpose",
+          "run_id",
           "track_id",
+          "module_id",
+          "label_id",
+          "label_scope",
+          "evidence_role",
+          "calendar_id",
+          "panel_hash",
+          "execution_rule_id",
+          "risk_rule_id",
+          "validation_params_hash",
           "data_range",
           "result_summary",
+          "result_artifact_hash",
           "decision_or_read_only",
           "pollution_flag",
           "followup_action"
@@ -1382,6 +1570,23 @@
         ]
       },
       {
+        "priority": "P1_P1_5_flows_derivatives_and_breadth",
+        "artifacts": [
+          "margin_trading_daily",
+          "northbound_stock_connect_daily",
+          "etf_flow_daily",
+          "market_breadth_limit_pressure_daily",
+          "index_futures_basis_oi_daily"
+        ],
+        "purpose": "support crowding, forced deleveraging, flow pressure and deployable risk explanation without entering current alpha keep",
+        "phase": "candidate_etl_and_stress_report_only_before_pit_coverage_audit",
+        "blocks": [
+          "deployable_risk_enhancement",
+          "gmsl_v2_transmission_layer",
+          "daily_tighten_only_risk_rule_claim"
+        ]
+      },
+      {
         "priority": "P1_5_gmsl_completion",
         "artifacts": [
           "fx_rates",
@@ -1390,7 +1595,10 @@
           "global_equity_futures",
           "MOVE_or_equivalent_rate_vol",
           "commodity_basket",
-          "pre_registered_geopolitical_event_calendar"
+          "pre_registered_geopolitical_event_calendar_with_pit_fields",
+          "onshore_night_session_commodities",
+          "timezone_session_cutoff_audit",
+          "gmsl_coverage_and_source_fetch_report"
         ],
         "purpose": "complete external shock coverage for report-only and future tighten-only audit",
         "blocks": [
@@ -1440,22 +1648,70 @@
       "run_id TEXT PRIMARY KEY",
       "test_family_id TEXT NOT NULL",
       "track_id TEXT NOT NULL",
+      "module_id TEXT",
+      "subtrack_id TEXT",
       "sleeve_id TEXT",
       "factor_id TEXT",
       "label_id TEXT NOT NULL",
+      "label_scope TEXT",
+      "evidence_role TEXT",
+      "alpha_keep_allowed INTEGER",
       "model_id TEXT",
+      "model_version TEXT",
+      "model_artifact_hash TEXT",
       "calendar_id TEXT",
       "panel_hash TEXT",
+      "feature_panel_hash TEXT",
+      "label_panel_hash TEXT",
       "execution_rule_id TEXT",
+      "risk_rule_id TEXT",
+      "risk_rule_version TEXT",
+      "risk_rule_hash TEXT",
+      "experiment_stage TEXT NOT NULL",
+      "warehouse_build_manifest_hash TEXT",
+      "walk_forward_calendar_hash TEXT",
+      "source_registry_hash TEXT",
+      "decision_frequency TEXT",
+      "rebalance_interval TEXT",
+      "holding_period TEXT",
       "trial_index_in_family INTEGER NOT NULL",
       "total_trials_in_family INTEGER NOT NULL",
       "attempt_count INTEGER NOT NULL",
+      "hypothesis_family TEXT",
+      "selection_path TEXT",
+      "pre_registered_or_exploratory TEXT",
+      "date_weighting_scheme TEXT",
+      "half_life_months REAL",
+      "universe_rule_version TEXT",
+      "holdout_access_count INTEGER",
+      "holdout_burned_flag INTEGER",
+      "holdout_access_log_path TEXT",
+      "holdout_shadow_period_start TEXT",
+      "holdout_shadow_period_end TEXT",
+      "leak_audit_status TEXT",
+      "pit_factor_audit_status TEXT",
+      "split_label_audit_status TEXT",
+      "execution_label_audit_status TEXT",
+      "orders_audit_status TEXT",
       "fdr_method TEXT",
+      "fdr_q_value REAL",
+      "factor_test_correlation_metric REAL",
+      "effective_hypothesis_count REAL",
+      "statistical_conflict_status TEXT",
       "ic_mean REAL",
       "ic_pvalue REAL",
       "bh_adjusted_pvalue REAL",
       "storey_q_value REAL",
       "bootstrap_p REAL",
+      "crowding_risk_score REAL",
+      "limit_lock_cvar REAL",
+      "orders_audit_path TEXT",
+      "execution_label_audit_path TEXT",
+      "execution_label_id TEXT",
+      "gmsl_manifest_hash TEXT",
+      "gmsl_shock_state_version TEXT",
+      "csrp_signal_hit_rate REAL",
+      "csrp_false_positive_rate REAL",
       "keep_decision TEXT NOT NULL",
       "created_at TEXT NOT NULL",
       "validation_params_hash TEXT NOT NULL",
@@ -1483,6 +1739,7 @@
     "minimum_indexes": [
       "experiment_runs(test_family_id, trial_index_in_family)",
       "experiment_runs(track_id, label_id)",
+      "experiment_runs(track_id, module_id, calendar_id)",
       "experiment_runs(sleeve_id)"
     ],
     "model_artifact_root": "model_artifacts/frozen_models",
@@ -1498,10 +1755,21 @@
     },
     "required_fields": [
       "track_id",
+      "module_id",
+      "subtrack_id",
       "label_id",
+      "label_scope",
+      "evidence_role",
+      "alpha_keep_allowed",
       "calendar_id",
       "panel_hash",
+      "feature_panel_hash",
+      "label_panel_hash",
       "execution_rule_id",
+      "risk_rule_id",
+      "risk_rule_version",
+      "risk_rule_hash",
+      "experiment_stage",
       "warehouse_build_manifest_hash",
       "walk_forward_calendar_hash",
       "source_registry_hash",
@@ -1547,6 +1815,7 @@
       "csrp_false_positive_rate",
       "created_at"
     ],
+    "risk_rule_id_required_when": "module_id == risk_response_candidate or any tighten-only rule, no_buy_flag, defer_rebalance_flag, reduce_only_flag, capital_multiplier_change, GMSL shock-state action, or CSRP-driven risk action is tested",
     "holdout_access_log_required": true,
     "holdout_access_log_schema_version": "holdout_access_log_v1",
     "holdout_access_log_required_fields": [
@@ -1555,10 +1824,14 @@
       "purpose",
       "run_id",
       "track_id",
+      "module_id",
       "label_id",
+      "label_scope",
+      "evidence_role",
       "calendar_id",
       "panel_hash",
       "execution_rule_id",
+      "risk_rule_id",
       "validation_params_hash",
       "data_range",
       "result_summary",
@@ -1568,14 +1841,39 @@
       "followup_action"
     ],
     "holdout_burned_flag_required_after_any_strategy_selection_use": true,
-    "burned_holdout_trigger": "any_holdout_result_used_for_strategy_selection_parameter_choice_threshold_choice_feature_choice_or_promotion_decision",
+    "burned_holdout_trigger": "any_holdout_result_used_for_strategy_selection_parameter_choice_threshold_choice_feature_choice_gmsl_shock_window_choice_risk_rule_choice_daily_tighten_only_choice_capital_overlay_choice_or_promotion_decision",
+    "burned_holdout_trigger_events": [
+      "model_selection",
+      "feature_selection",
+      "parameter_choice",
+      "threshold_choice",
+      "early_stopping",
+      "half_life_or_weighting_choice",
+      "gmsl_shock_window_choice",
+      "risk_rule_choice",
+      "daily_tighten_only_rule_choice",
+      "capital_overlay_mapping_choice",
+      "promotion_or_keep_decision"
+    ],
+    "holdout_access_log_min_fields_deprecated": true,
     "holdout_access_log_min_fields": [
       "timestamp",
       "operator",
       "purpose",
+      "run_id",
       "track_id",
+      "module_id",
+      "label_id",
+      "label_scope",
+      "evidence_role",
+      "calendar_id",
+      "panel_hash",
+      "execution_rule_id",
+      "risk_rule_id",
+      "validation_params_hash",
       "data_range",
       "result_summary",
+      "result_artifact_hash",
       "decision_or_read_only",
       "pollution_flag",
       "followup_action"
@@ -1627,6 +1925,41 @@
     ],
     "orders_audit_offline_weight_field": "offline_sim_target_weight",
     "orders_audit_forbidden_production_order_field": "target_weight",
+    "orders_audit_minimum_fields": [
+      "order_id",
+      "run_id",
+      "step_id",
+      "track_id",
+      "module_id",
+      "asset_id",
+      "signal_date",
+      "execution_date",
+      "side",
+      "intended_weight",
+      "offline_sim_target_weight",
+      "intended_order_value",
+      "intended_shares",
+      "rounded_shares",
+      "open_price_available",
+      "limit_up_at_open",
+      "limit_down_at_open",
+      "suspended_or_no_bar",
+      "filled_shares",
+      "unfilled_shares",
+      "fill_price",
+      "execution_slippage",
+      "order_status",
+      "no_trade_reason",
+      "carryover_position",
+      "cash_idle"
+    ],
+    "small_account_audit_fields": [
+      "minimum_commission_assumption_id",
+      "minimum_order_amount_assumption_id",
+      "cash_idle_ratio",
+      "round_lot_failure_ratio",
+      "min_fee_drag"
+    ],
     "required_metrics": [
       "correlation",
       "sign_agreement",
@@ -1643,9 +1976,50 @@
     ]
   },
   "gmsl": {
-    "status": "candidate_etl_and_report_only_until_pit_timezone_coverage_audit",
+    "status": "gmsl_v0_partial_candidate_etl_and_report_only_until_pit_timezone_coverage_audit",
     "role": "s1_report_item_s1_5_production_audit_s3_tighten_only_candidate",
     "not_alpha_mainline": true,
+    "version_levels": {
+      "GMSL-v0": {
+        "status": "current_partial_stress_report",
+        "data_requirement": "Cboe VIX/OVX/GVZ plus existing reference_rates framework; geopolitical_event_calendar initialized but empty",
+        "allowed_use": "source_registry_partial_stress_report_timezone_audit_framework",
+        "forbidden_use": "alpha_keep_model_selection_threshold_tuning_or_tighten_only_rule"
+      },
+      "GMSL-v1": {
+        "status": "planned_not_complete",
+        "data_requirement": "Brent/WTI/SC, gold/copper, USD/CNH, DXY or substitute, UST, VIX/OVX/GVZ, major global equity indices or futures, timezone/session cutoff/PIT/coverage audit",
+        "allowed_use": "S1 report item and S1.5 production-readiness audit after source audit",
+        "forbidden_use": "automatic_rebalance_or_risk_increase"
+      },
+      "GMSL-v2": {
+        "status": "planned_not_complete",
+        "data_requirement": "geopolitical event calendar, onshore night-session commodities, index futures basis/OI, northbound/ETF flows, market breadth and limit pressure",
+        "allowed_use": "S3 tighten-only candidate only after independent walk-forward, holdout and false-positive cost audit",
+        "forbidden_use": "alpha_ranking_change_or_risk_loosen"
+      }
+    },
+    "china_transmission_channels": [
+      "energy_import_cost",
+      "fx_and_capital_flow",
+      "commodity_inflation",
+      "rates_and_liquidity",
+      "global_risk_appetite",
+      "domestic_trading_constraint_amplification"
+    ],
+    "event_calendar_required_fields": [
+      "event_id",
+      "event_type",
+      "event_utc_time",
+      "first_public_available_at_utc",
+      "cn_decision_available_at",
+      "first_a_share_session_after_event",
+      "shock_window_definition",
+      "source_name",
+      "source_url_or_document_id",
+      "registration_time",
+      "retrospective_flag"
+    ],
     "can_increase_risk_before_validation": false,
     "forbidden_before_validation": [
       "increase_net_exposure",

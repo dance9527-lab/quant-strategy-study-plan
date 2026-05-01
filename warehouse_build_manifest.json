@@ -1,5 +1,5 @@
 {
-  "manifest_version": "2026-05-01-final-review-v2-execution-hardening",
+  "manifest_version": "2026-05-01-a-share-final-review-execution-hardening",
   "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_feature_label_20260430_094835_plus_gmsl_partial_cboe_20260430_221532",
   "purpose": "warehouse_generated_data_fact_manifest",
   "canonical_warehouse": "D:\\data\\warehouse",
@@ -68,19 +68,19 @@
     },
     "git_source_registry": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\external_data_sources.csv",
-      "sha256": "BE7B6E6E2B5D75992744C47BE7E03A362C5EB42FD08DE255AE7B97EC6ACD3992"
+      "sha256": "36EAB0FCAEB88A39C5847583C145A96310515CB21A574179FE39410256928A7B"
     },
     "git_validation_params": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\validation_params.json",
-      "sha256": "2434776000E92F2681271C2526DD3B2C82949B4397D6336E178A82C31F95C51F"
+      "sha256": "D0F3EA823C9BB09C9E77883152DFFB6306A76DD90517CFFC9C13DB8E0D652A05"
     },
     "git_data_usage_guide": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\DATA_USAGE_GUIDE.md",
-      "sha256": "171F10CF6132B6141C6272DCDE06AFB2CCB4C0AA1CDB08A05A45E385873B7C11"
+      "sha256": "A0FD9FE12A2FCC61B65B7EDFEE5F284760DBD11586F559E9DDA1FDD1F8684AFA"
     },
     "git_warehouse_readme": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\WAREHOUSE_README.md",
-      "sha256": "901C729488F5557451FA9EE01D6DD4697D3442E77B6953D6A30493E5C49BA762"
+      "sha256": "76413E3B8B76C6A2DF9FC3B3F5EFDD41D34B5CF3BF09EEDB4AC768320357A185"
     }
   },
   "table_snapshot": {
@@ -140,7 +140,7 @@
     "valuation_holdout_impact_audit_present": false,
     "suspension_precision_recall_audit_present": false,
     "execution_label_misalignment_audit_present": false,
-    "warehouse_root_doc_mirror_hashes_match_git": false
+    "warehouse_root_doc_mirror_hashes_match_git": true
   },
   "must_disclose_gaps": [
     "valuation_daily_2026_gap_2026-01-05_to_2026-02-05",
@@ -164,8 +164,7 @@
     "factor_direction_registry_missing",
     "valuation_holdout_impact_audit_missing",
     "suspension_precision_recall_audit_missing",
-    "survivorship_bias_audit_missing",
-    "warehouse_root_doc_mirror_may_lag_git_mirror"
+    "survivorship_bias_audit_missing"
   ],
   "usage_rules": {
     "strategy_docs_must_reference_manifest_hash": true,
@@ -173,7 +172,8 @@
     "features_and_labels_are_built_but_training_still_requires_walk_forward_calendar_and_holdout_log": true,
     "return_adjusted_pit_is_adjusted_return_proxy_until_corporate_actions_audit": true,
     "gmsl_sources_are_candidate_only_until_timezone_session_cutoff_pit_audit": true,
-    "gmsl_v1_partial_stress_report_only": true,
+    "gmsl_v0_partial_stress_report_only": true,
+    "gmsl_v1_full_stress_layer_not_built": true,
     "gmsl_v2_full_external_shock_layer_not_built": true,
     "sqlite_experiment_ledger_required_before_keep": true,
     "factor_direction_registry_required_before_oot": true,
