@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-01-final-review-independent-sync",
+  "version": "2026-05-01-capital-overlay-segmented-sleeves",
   "scope": "official_strategy_evidence",
   "parameter_basis": [
     "quant_strategy_plan.md",
@@ -667,6 +667,30 @@
       60,
       120
     ],
+    "capital_test_amounts_cny": [
+      100000,
+      200000,
+      500000,
+      1000000,
+      10000000,
+      50000000,
+      100000000
+    ],
+    "small_account_test_amounts_cny": [
+      100000,
+      200000,
+      500000,
+      1000000
+    ],
+    "capacity_stress_amounts_cny": [
+      10000000,
+      50000000,
+      100000000
+    ],
+    "optional_capacity_amount_cny": 500000000,
+    "small_account_tests_do_not_replace_capacity_stress": true,
+    "small_account_must_report_round_lot_cash_idle_and_minimum_fee_assumption": true,
+    "minimum_fee_not_modelled_flag_required_if_missing_from_cost_table": true,
     "amount_coverage_report_required": true,
     "crowding_capacity_required": true,
     "crowding_capacity_metrics": [
@@ -727,6 +751,41 @@
     "ic_rolling_window_days": 20,
     "alert_only_before_validation": true,
     "position_change_requires_walk_forward_validation": true,
+    "capital_allocation_overlay": {
+      "status": "s1_5_s2_candidate_not_s1m_default",
+      "role": "control_total_invested_capital_after_stock_selection",
+      "does_not_select_stocks": true,
+      "does_not_change_training_labels_or_features": true,
+      "target_notional_formula": "initial_capital * capital_multiplier(market_state)",
+      "cash_treatment": "uninvested_capital_stays_cash_no_leverage_no_return_boost",
+      "full_investment_control_required": true,
+      "conservative_mapping": {
+        "bull": [
+          0.8,
+          1.0
+        ],
+        "sideways": [
+          0.4,
+          0.7
+        ],
+        "bear": [
+          0.0,
+          0.3
+        ],
+        "stress": [
+          0.0,
+          0.0
+        ]
+      },
+      "challenge_mapping": {
+        "bull": 1.0,
+        "sideways": 0.6,
+        "bear": 0.3,
+        "stress": 0.0
+      },
+      "threshold_selection_forbidden_from_oot_or_holdout": true,
+      "keep_requires_drawdown_or_cvar_or_execution_failure_improvement": true
+    },
     "ic_half_life_monitoring_required": true,
     "ic_half_life_unit": "quarters",
     "ic_half_life_gate": false,
@@ -924,6 +983,35 @@
     "default_universe": "universe_daily.in_factor_research_universe",
     "default_universe_role": "entry_eligible_universe_proxy_not_full_research_observable_universe",
     "known_rule": "can_trade_close_based AND listing_age_trading_days >= 60 AND NOT is_risk_warning_pit",
+    "segmented_sleeve_policy": {
+      "status": "pre_registered_candidate_sleeves_not_default_s1m_replacement",
+      "default_baseline_retained": "baseline_top_score_all_eligible",
+      "score_percentile_sleeves": [
+        "score_p95_p100_top_extreme",
+        "score_p80_p95_upper_middle",
+        "score_p60_p80_middle_high",
+        "score_p40_p60_middle_diagnostic"
+      ],
+      "market_cap_percentile_sleeves": [
+        "mv_p0_p20_micro_diagnostic_only",
+        "mv_p20_p40_small",
+        "mv_p40_p60_mid",
+        "mv_p60_p80_large_mid",
+        "mv_p80_p100_large"
+      ],
+      "first_batch_combo_sleeves": [
+        "baseline_top_score_all_eligible",
+        "upper_middle_score_p80_p95_all_eligible",
+        "small_mid_mv_p20_p60_top_score",
+        "balanced_mv_p20_p80_score_p60_p95",
+        "micro_mv_p0_p20_diagnostic_only"
+      ],
+      "microcap_default_keep_allowed": false,
+      "thresholds_must_be_preregistered": true,
+      "counts_toward_attempt_count": true,
+      "oot_or_holdout_selection_forbidden": true,
+      "same_cost_capacity_and_calendar_required": true
+    },
     "required_universe_layers": {
       "research_observable_universe": "listed_and_bar_present_and_basic_lifecycle_quality; do_not_drop_limit_up_down_risk_samples_for_ic",
       "entry_eligible_universe": "t_plus_1_buy_candidate_with_st_listing_age_adv_capacity_and_limit_pressure_constraints",

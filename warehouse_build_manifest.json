@@ -1,5 +1,5 @@
 {
-  "manifest_version": "2026-05-01-final-review-independent-sync",
+  "manifest_version": "2026-05-01-capital-overlay-segmented-sleeves",
   "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_feature_label_20260430_094835_plus_gmsl_partial_cboe_20260430_221532",
   "purpose": "warehouse_generated_data_fact_manifest",
   "canonical_warehouse": "D:\\data\\warehouse",
@@ -72,7 +72,7 @@
     },
     "git_validation_params": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\validation_params.json",
-      "sha256": "5C0A008E086A78541BE99E1A07BCB5075DC82F7EB1D31F8A6613C782D8E69390"
+      "sha256": "2A2D2D078B4AEEE42C039A97D1F4B431165B533B4035E789D0C509927986D722"
     },
     "git_data_usage_guide": {
       "path": "D:\\quantum_a0\\quant-strategy-study-plan\\DATA_USAGE_GUIDE.md",

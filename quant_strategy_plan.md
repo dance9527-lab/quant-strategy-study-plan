@@ -14,7 +14,7 @@
 - `D:\data\warehouse\audit_reports\leakage_check_report.json`
 - `checked_at=2026-04-30 09:48:02`
 - 21 类目录全部 PASS，新增覆盖 `features`、`labels`、`corporate_actions`、`global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar`
-- `validation_params.json` 版本：`2026-05-01-final-review-independent-sync`
+- `validation_params.json` 版本：`2026-05-01-capital-overlay-segmented-sleeves`
 - `warehouse_build_manifest.json` 记录当前表行数、最大数据日期、source status 和必须披露缺口
 - `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json`、`label_audit_forward_returns_v1.json`、`source_status_audit_r7.json` 均已生成
 
@@ -125,6 +125,7 @@
 | P1 | S1-M 月选股正式强基线 | P0 audit 通过 | 验证 20 日持有期、固定月末/月初调仓、低换手多因子组合是否有成本后可交易超额；21 日滚动为敏感性 | 近期唯一正式 alpha keep 主线 |
 | P1/P1.5 | S1-D/S1-R 日频风险/执行主线 | report-only 需 >=252 个成熟日度决策日；tighten-only 生产规则需 >=504 个成熟日、>=24 月桶、>=8 季度桶、换手控制、涨跌停/停牌影响评估、成本 1x/2x/3x 和 execution PnL 审计 | 验证 1/5 日短 horizon 信号能否用于短期因子研究、风险预警、alpha 衰减、GMSL shock state、订单失败、流动性和执行审计 | 不阻塞 S1-M；不得作为近期 alpha keep；主动调仓/alpha sleeve 后置 |
 | P1 | 基础容量压力测试 | P0 成交规则可运行 | 用 trailing ADV、参与率、成交失败和市值分档量化真实成交边界 | 随 S1 同步输出 |
+| P1 | 小资金可行性档 | P0 成交规则可运行 | 增加 10 万、20 万、50 万、100 万初始资金档，检查 100 股整数手、最低佣金/最小成交额、现金闲置和小账户成本拖累 | 只解释小资金实操，不替代 1000 万、5000 万、1 亿容量 |
 | P1 | Concept Shift + GMSL 诊断 | S1 walk-forward 同步运行 | 检测 2023-2025 内部结构变化、因子拥挤、分布漂移以及能源、汇率、全球波动率、利率、商品和地缘事件冲击是否破坏基线稳定性 | 不直接作为收益结论，不得用 OOT/holdout 调阈值 |
 | P1 | 公司行为和 total-return 审计 | source/available_at 先行 | 复核 adjusted return、除权除息、分红送配和绩效会计 | 不阻塞 market-only S1，阻塞 total-return 声明 |
 | P1 | 候选另类数据 ETL | source/available_at 先行 | 北向、融资融券、限售解禁只进入 candidate tracking | 不阻塞传统因子 S1 |
@@ -166,6 +167,13 @@
 6. LightGBM Ranker 或 LambdaRank，用于 Top-N 排序。
 
 第一阶段目标是形成强基线，而不是调参追高收益。
+
+组合构建新增两类预注册对照，但不改变 S1-M 默认主线：
+
+1. 分数分段 sleeve：保留最高分/Top-N 基线，同时测试 `P80-P95` 次高分段、`P60-P80` 中高分段和 `P40-P60` 中段诊断，检验收益是否只来自极端最高排名。低于 `P40` 默认不进入多头持仓，只作风险和反向信号诊断。
+2. 市值分段 sleeve：按当日 PIT 市值分位切成 `P0-P20`、`P20-P40`、`P40-P60`、`P60-P80`、`P80-P100`；默认可交易候选优先测试 `P20-P80` 中小到中大型区间，`P0-P20` 微盘段只作诊断或单独高风险 sleeve，不得放宽流动性、ST、停牌和涨跌停约束。
+
+这些 sleeve 必须使用同一训练窗、同一成本、同一交易规则和同一 walk-forward calendar；阈值必须在训练前写入实验登记，不能根据 OOT/holdout 结果挑选最优分段。
 
 Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱动告警”：
 
@@ -273,6 +281,7 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 ### 容量测试前移
 - S1阶段增加最简容量过滤（日均成交额>1000万）
 - S1同步报告 trailing ADV、参与率、成交失败率、涨跌停压力和市值分档 IC；S2做精细容量分析（分档滑点/冲击/参与率）
+- 资金档分两层：小资金实操档 `10 万、20 万、50 万、100 万`；容量压力档 `1000 万、5000 万、1 亿`，表面容量足够时追加 `5 亿`。小资金档必须报告 100 股整数手、现金闲置、最低佣金/最小成交额假设和成本拖累；不能用小资金表现外推大资金容量。
 
 ### S1 启动前补充验证
 - purge 敏感性：在相同因子和窗口下对比 40/60/80 个交易日 purge；该实验不阻塞面板构建，但阻塞正式 keep/晋级结论。
@@ -345,6 +354,7 @@ Phase A0 预计 25-45 个工作日，拆成 A0.1 和 A0.2：
 - Newey-West HAC IC t-stat、Andrews/lag 6/lag 12 带宽敏感性、block bootstrap 和 10/21/42 日 block 敏感性。
 - 固定月度调仓的成交失败、T+1 单日执行、1/3/5 日分批执行必报、月度换手和容量上限。
 - 分层收益、制度性风险切片、IC 衰减半衰期和 concept shift 报告。
+- 分数分段与市值分段持仓对照：最高分/Top-N、次高分段、中高分段、P20-P80 中小盘/中盘组合和微盘诊断；所有分段阈值预注册并计入 `attempt_count`。
 
 ### Phase A-R：S1-D/S1-R 日频风险/执行主线
 
@@ -361,16 +371,19 @@ Phase A0 预计 25-45 个工作日，拆成 A0.1 和 A0.2：
 
 ### Phase B：风险状态和组合约束
 
-目标：减少回撤，约束风格和行业暴露。
+目标：减少回撤，约束风格、行业暴露和入市资本比例。
 
 产出：
 
 - 市场状态变量库。
-- 仓位开关对照实验。
+- 资金仓位控制模块：选股模型先生成目标股票篮子，资金模块再按市场状态给组合目标市值乘以 capital multiplier；现金部分不追买、不加杠杆、不参与收益承诺。
+- 仓位开关对照实验：至少包含 full-investment 对照、保守映射 `牛市 80%-100% / 震荡 40%-70% / 熊市 0%-30% / 极端风险 0%`、挑战映射 `100/60/30/0` 和固定低仓位对照。
 - CSRP/GMSL 稳健性：等权 5 年、12 月半衰期 row-equal/date-balanced 指数衰减、18 月半衰期敏感性、结构性 regime map、GMSL shock-state、拥挤容量、forced deleveraging 和成熟 IC 状态机对照；必须同口径击败等权控制且通过全部审计才可晋级。
 - 风险开关 v1：S3 前使用 25/25/25/25 均匀权重占位；S3 验证后替换为数据驱动仓位比例。100/60/30/0 只保留为可选历史假设或挑战基线，不作为默认事实。
 - 熔断规则：组合回撤、市场宽度崩塌、跌停压力和流动性枯竭触发降仓。
 - 行业、市值、beta、换手、容量约束组合。
+
+资金仓位控制模块只在 S1.5/S2 之后作为后续验证项，不参与 S1-M 默认选股模型训练、特征选择、阈值选择或 holdout 策略选择。若该模块只降低收益而不能降低最大回撤、CVaR、跌停卖不出暴露或成交失败，不得 keep。
 
 ### Phase C：外部低频数据 ETL
 

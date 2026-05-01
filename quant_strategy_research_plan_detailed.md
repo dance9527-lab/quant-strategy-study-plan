@@ -175,6 +175,36 @@ is_suspended_inferred = NOT bar_present
 - 后续应把 `universe_rule_version` 落到产物或审计报告；若 Parquet 主表暂未持久化该字段，必须记录构造脚本 hash。
 - 输出三层 universe 的年度样本数、重叠率、剔除原因和涨跌停/停牌风险样本保留情况。
 
+### 3.1.1 分层持仓和中小盘 sleeve 预注册
+
+默认 S1-M 仍保留最高分/Top-N 或 top quantile 组合基线；新增分层持仓只作为预注册对照，不得根据 OOT 或 holdout 表现事后选择。
+
+分数分段：
+
+- `score_p95_p100_top_extreme`：最高分段，作为拥挤和追高风险对照。
+- `score_p80_p95_upper_middle`：次高分段，检验成长性或后续收益是否不一定来自最高排名。
+- `score_p60_p80_middle_high`：中高分段，检验较低拥挤、较低估值或较低换手的折中组合。
+- `score_p40_p60_middle_diagnostic`：只作诊断，默认不作为正式多头持仓。
+- `score_below_p40`：不进入默认多头组合，只用于风险、反向信号或 discard 诊断。
+
+市值分段按每个调仓日的 PIT 市值截面计算：
+
+- `mv_p0_p20_micro`：微盘，默认只作高风险诊断或独立高风险 sleeve；不得因历史收益好而放宽 ADV、ST、停牌、涨跌停和容量约束。
+- `mv_p20_p40_small`：小盘候选。
+- `mv_p40_p60_mid`：中盘候选。
+- `mv_p60_p80_large_mid`：中大型候选。
+- `mv_p80_p100_large`：大盘对照。
+
+首批组合 sleeve：
+
+- `baseline_top_score_all_eligible`：默认最高分/Top-N 基线。
+- `upper_middle_score_p80_p95_all_eligible`：排除极端最高分段后的次高分段对照。
+- `small_mid_mv_p20_p60_top_score`：中小盘内选高分。
+- `balanced_mv_p20_p80_score_p60_p95`：中小到中大型 + 中高到次高分段，避免完全押注极端最高排名或微盘。
+- `micro_mv_p0_p20_diagnostic_only`：微盘诊断，不进入默认 keep；若未来作为独立高风险策略，必须单独登记容量、成本、跌停未成交和左尾风险。
+
+所有 sleeve 必须记录 `sleeve_id`、分数分位阈值、市值分位阈值、持仓数或权重上限、是否允许行业/市值中性化、成本口径、容量口径、`test_family_id` 和 `attempt_count`。当前 market-only S1 中“成长性”只能指价格动量、成交活跃度和风险调整收益等市场代理；ROE、收入增长、利润增长等基本面成长性必须等 P2 基本面 PIT 审计通过后再进入。
+
 若自定义股票池，必须从以下字段派生：
 
 - bar 是否存在。
@@ -228,10 +258,18 @@ is_suspended_inferred = NOT bar_present
 
 容量压力测试至少覆盖：
 
+- 10 万。
+- 20 万。
+- 50 万。
+- 100 万。
 - 1000 万。
 - 5000 万。
 - 1 亿。
 - 5 亿，如策略表面容量足够。
+
+其中 10 万、20 万、50 万、100 万是小资金实操档，用于检查早期测试账户能否按 100 股整数手成交、是否产生大量现金闲置、最低佣金或最小成交额假设是否吞噬收益。1000 万、5000 万、1 亿是容量压力档；小资金档表现不能外推为大资金容量。
+
+若 `trading_costs.equity_cost_history` 尚未登记最低佣金、最低手续费或最小订单金额，小资金档必须在报告中标注 `minimum_fee_not_modelled`，并至少给出“不含最低佣金”和“预注册最低佣金假设”两种敏感性。最低佣金假设不得根据回测结果调优。
 
 每档报告：
 
@@ -857,6 +895,7 @@ Soft Floor（报告并评估，不满足需说明理由）：
 - Structural regime map：科创板注册制、创业板注册制、北交所、全面注册制、新国九条、2024Q1 量化拥挤压力和程序化交易监管作为预注册诊断/生产前审计段，不作为选模窗口。
 - GMSL shock-state：Brent/WTI/SC、黄金/铜/工业金属、USD/CNH/DXY、VIX/MOVE、UST、全球股指/期货和地缘事件窗口只作为 candidate ETL 与 stress report。所有海外源必须完成 vendor/license、时区、session cutoff、`available_at <= decision_time`、coverage 和 manifest 审计后才可进入生产前报告；Cboe VIX/OVX/GVZ 虽已局部入仓，仍需按 A 股 T 日 16:00 规则顺延晚于决策时点的海外记录。GMSL 缺源只阻塞 GMSL tighten-only 或可部署叙事，不阻塞 market-only S1-M 启动。
 - Crowding capacity panel：因子重叠、成交额占比、左尾 CVaR、跌停未成交、解锁反转、流动性枯竭和风格去杠杆代理。
+- Capital allocation overlay candidate：牛熊/市场状态只作为资金仓位乘数，不参与选股模型训练、股票打分、特征筛选或标签构造。先由 S1-M 生成股票篮子，再按市场状态把目标入市资本乘以 `capital_multiplier`，剩余资金保留现金。
 
 禁止：
 
@@ -876,6 +915,7 @@ S1.5 通过条件：
 - 在预注册 shift 切片中 MaxDD、CVaR、左尾或成交失败暴露改善，且非 shift 期没有不可接受恶化。
 - 在预注册 GMSL shock-state 下，IC/RIC、成本后 PnL、成交失败、limit-lock CVaR、行业/风格暴露和容量不出现不可解释恶化；若拟作为风控规则，还必须报告错杀收益、避免回撤和交易成本变化。
 - 拥挤容量在 1000 万和 5000 万档通过；1 亿档若失败，必须给出真实容量上限。
+- 资金仓位控制候选必须相对 full-investment 对照降低最大回撤、CVaR、跌停卖不出暴露或成交失败；若只是降低收益或靠 holdout 调阈值，不得 keep。
 - 通过与 S1 相同的 PIT、split label、benchmark、holdout、DSR/PBO、FDR、容量和交易约束审计。
 - 模型版本、训练截止、标签截止、半衰期、重训锚点、参数 hash 和预测文件均可复现。
 
@@ -943,6 +983,7 @@ S2 启动条件：
 
 S2 通过条件：
 
+- 10 万、20 万、50 万、100 万小资金档均给出 100 股整数手、现金闲置、最低佣金/最小订单假设和成本拖累。
 - 1000 万、5000 万、1 亿资金档均给出参与率、成交失败率、成本拖累和容量上限。
 - 若 1 亿档失效，不得按小资金收益外推。
 - 分档滑点和冲击成本后仍保留可解释的成本后超额。
@@ -964,9 +1005,19 @@ S2 通过条件：
 
 输出：
 
-- 仓位开关 v1 候选：S3 研究前使用均匀权重（25/25/25/25）占位，S3 验证后替换为数据驱动的仓位比例。
+- 资金仓位控制模块 v1：`target_notional = initial_capital * capital_multiplier(state)`；股票选择和个股权重先由 S1-M 组合生成，市场状态只改变总入市资金，剩余资金记为现金。
+- 仓位开关 v1 候选：S3 研究前使用均匀权重（25/25/25/25）占位，S3 验证后替换为数据驱动的仓位比例；同时测试投资人可理解的保守映射和挑战映射。
 - 因子权重倾斜。
 - 风险熔断。
+
+预注册资金映射候选：
+
+| 状态 | 保守映射 | 挑战映射 | 说明 |
+|---|---:|---:|---|
+| 牛市 | 0.80-1.00 | 1.00 | 可接近满仓，但不得加杠杆 |
+| 震荡市 | 0.40-0.70 | 0.60 | 保留现金，降低组合波动 |
+| 熊市 | 0.00-0.30 | 0.30 | 小仓位验证或低仓运行 |
+| 极端风险 | 0.00 | 0.00 | 空仓或只保留已登记的 reduce-only 处理 |
 
 规则：
 
@@ -974,6 +1025,7 @@ S2 通过条件：
 - 触发指标可包括指数趋势、市场宽度、全市场波动率、跌停压力、成交额枯竭和组合回撤。
 - 熔断必须有冷却期和恢复条件。
 - 风险开关必须在 walk-forward 中独立验证；若只降低收益不降低回撤或尾部风险，不得 keep。
+- 市场状态不得直接决定买哪只股票，不得用当前 OOT、holdout 或未成熟标签选择牛熊阈值、仓位比例、冷却期或恢复条件。
 
 ### 9.4 S4：PIT 行业中性和行业轮动
 
@@ -1259,6 +1311,8 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 - Newey-West HAC IC t-stat、普通 t-stat 诊断值和 block/bootstrap p-value；S1-D/S1-R 先按日计算 IC，再按日/周/月/季汇总。
 - 10/21/42 日 `block_days` 敏感性；S1-D/S1-R 默认 block=21，晋级或生产 tighten-only 使用最保守结论。
 - Top-Bottom。
+- 分数分段 sleeve：最高分/Top-N、`P80-P95`、`P60-P80`、`P40-P60` 诊断，以及不同分段的成本后收益、换手、回撤和成交失败。
+- 市值分段 sleeve：`P20-P40`、`P40-P60`、`P60-P80`、`P20-P80` 与 `P0-P20` 微盘诊断；微盘不得默认进入 keep。
 - 分年度稳定性。
 - 季度滚动 IC 衰减监控。
 - 涨跌停排除 IC、注册制阶段、流动性枯竭日切片。
@@ -1272,10 +1326,11 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 输出：
 
 - `S1-M_monthly_rebalance_baseline`：20 日标签、固定月末/月初调仓、21 日滚动敏感性、等权、ICIR、线性、LightGBM/Ranker 对照。
+- `S1-M_segmented_sleeve_baseline`：最高分、次高分、中高分、中小盘/中盘和微盘诊断 sleeve；所有阈值预注册并计入 `attempt_count`。
 - `S1-D_daily_risk_execution_offline`：1/5 日标签、每日候选、risk signal、alert state、GMSL shock state、离线滚动组合模拟、等权、ICIR、线性基线；非线性模型只作后续对照，结果不进入 official keep。
 - 成本后收益，按 S1-M 和 S1-D/S1-R 离线风险执行分开报告；S1-D/S1-R 仅作诊断或未来 tighten-only 候选。
 - 成交失败、连续锁死和解锁后反转，按 S1-M 和 S1-D/S1-R 离线风险执行分开报告。
-- S1 最小容量：1000 万、5000 万、1 亿；月选股通过的容量不得自动转给日选股。
+- S1 最小资金档：小资金实操档 10 万、20 万、50 万、100 万；容量压力档 1000 万、5000 万、1 亿。月选股通过的容量不得自动转给日选股。
 - `orders_audit` 或等价订单状态机产物；S1-D/S1-R 必须有 `daily_orders_audit` 和 `execution_label_audit`，但独立 `limit_events` 未入仓前只能使用 close-based 代理字段。
 - 拥挤容量、GMSL shock-state、limit-lock CVaR 和成交额占比；S1-D/S1-R 必须额外报告日换手、三层换手控制、成本 1x/2x/3x、日度参与率和未成交继续暴露。
 - 资金规模敏感性。
@@ -1288,6 +1343,7 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 - S1.5 CSRP/GMSL：等权 5 年、row-equal/date-balanced 12 月半衰期、18 月半衰期、6/24 月诊断、可选 36 月研究网格、4/6 年训练窗口诊断、结构性 regime map、GMSL shock-state、拥挤容量、forced deleveraging 和 63 日重训频率对照。6/24/36 月网格、4/6 年窗口和 GMSL 阈值只作研究记录，计入 `attempt_count`，不得进入 keep/晋级，不得替代 5 年单轨主证据。
 - 风险开关报告。
 - 回撤改善报告。
+- 资金仓位控制模块报告：full-investment 对照、保守映射、挑战映射、固定低仓位对照、现金闲置、错杀收益、避免回撤和交易成本变化。
 - S3 前 25/25/25/25 均匀权重占位和数据驱动仓位开关实验；100/60/30/0 只作为可选历史假设或挑战基线。
 - 行业、市值、beta、换手约束对比。
 
