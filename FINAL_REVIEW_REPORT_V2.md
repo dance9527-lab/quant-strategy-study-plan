@@ -1,268 +1,198 @@
-# 四位专家独立审计 + 多轮讨论共识报告（v2 — 更新后文档）
+# 量化策略文档评审意见
 
 > 审计日期：2026-05-01
-> 参与者：Main Agent、Review Agent、DeepSeek Agent、Coder Agent
-> 轮次：R1独立审计 → R2辩论（互相challenge） → R3回应（被说服/坚持）
-> 文档版本：更新后的 quant_strategy_plan.md 和 quant_strategy_research_plan_detailed.md
+> 审计对象：更新后的 quant_strategy_plan.md 和 quant_strategy_research_plan_detailed.md
+> 审计依据：DATA_USAGE_GUIDE.md、WAREHOUSE_README.md
 
 ---
 
-## 一、讨论流程
+## 一、需修正项（P0）
 
-| 轮次 | 形式 | 产出 |
-|---|---|---|
-| R1 | 四位独立审计 | 每位agent独立评估文档，输出审计报告 |
-| R2 | 辩论轮（互相challenge） | 每位agent读取其他三位R1报告，对5个分歧点明确站队并反驳对方 |
-| R3 | 回应轮（被说服/坚持） | 每位agent读取其他三位R2辩论报告，回应挑战，更新或维持立场 |
+### 1. CSRP命中窗口未定义
 
----
+**问题**：§9.1.5 定义了 CSRP 误报率公式 `false_positive_rate = 1 - hit_rate`，但未定义"命中"的窗口长度和判定标准。没有命中窗口定义，`hit_rate` 的分子分母无法计算，整个误报率监控框架无法执行。
 
-## 二、上一轮共识采纳审查
+**修正建议**：
 
-上一轮11项共识**全部正确采纳**（11/11）：
-
-| # | 共识 | 采纳状态 |
-|---|---|---|
-| 1 | GMSL数据不完整，分GMSL-v1/v2 | ✅ |
-| 2 | Phase A0 拆分A0.1+A0.2 | ✅ |
-| 3 | Walk-forward Calendar系统基石 | ✅ |
-| 4 | Concept shift 5/6门槛 | ✅ |
-| 5 | 24步OOT只是smoke test | ✅ |
-| 6 | SQLite WAL实验台账 | ✅ |
-| 7 | 1日标签purge=20天 | ✅ |
-| 8 | Block bootstrap敏感性{10,21,42} | ✅ |
-| 9 | 因子方向Tier 1/2/3 | ✅ |
-| 10 | 多重检验完整实验族 | ✅ |
-| 11 | 标签misalignment P0 | ✅ |
-
----
-
-## 三、5个分歧点的讨论过程与最终共识
-
-### 分歧点1：MDE功效分析
-
-**讨论过程**：
-- R1：DeepSeek P0, Main P1, Coder P0, Review 未单独讨论
-- R2：DeepSeek P0（给出功效表：24步对Sharpe=0.5功效仅17%）, Main P1, Coder P0, Review P1
-- R3：**DeepSeek 改为 P1+**（接受"keep基于完整OOT"论点）, Main P1, Coder **改为 P1**, Review P1
-
-**最终共识：P1（4:0）**
-
-**具体内容**：
-- 24步OOT对年化Sharpe=0.5的alpha功效仅17%，对Sharpe=0.8的功效约33%
-- 完整OOT约180步对Sharpe=0.5的功效约58%，对Sharpe=1.0的功效约95%
-- 在§5.5增加功效分析表和MDE说明，明确24步smoke test的检测能力边界
-- 在validation_params.json中记录MDE分析的假设和结论
-
-**DeepSeek R3 让步说明**：接受Main/Review的"keep决策基于完整OOT（~180步）"论点，将MDE从P0调整为P1+。但坚持在文档中补充功效分析表——这不是阻塞S1启动，而是量化框架的能力边界。
-
-### 分歧点2：CSRP命中窗口
-
-**讨论过程**：
-- R1：Review P0, Main P1, DeepSeek P0, Coder P0
-- R2：四位一致P0。Main被Review说服从P1改为P0
-- R2辩论：DeepSeek提出窗口长度修正（3个OOT step vs 20日标签持有期）
-- R3：Main接受DeepSeek修正
-
-**最终共识：P0（4:0）**
-
-**具体定义**：
 | 参数 | 定义 |
 |---|---|
-| 命中窗口主口径 | 信号触发后**3个OOT step**（~3个月） |
-| 命中标准（主口径） | 3步中至少2步的组合收益（扣除成本后）< benchmark收益 |
-| 命中标准（辅助报告） | 3步中至少2步的成熟IC < 0 |
-| 排列检验 | ≥1000次block permutation（block=21天） |
-| 最小信号数 | n_signals ≥ 5才报告，≥ 20才作为tighten-only依据 |
+| 命中窗口 | 信号触发后 3 个 OOT step（约 3 个月） |
+| 命中标准（主口径） | 3 步中至少 2 步的组合收益（扣除成本后）< benchmark 收益 |
+| 命中标准（辅助报告） | 3 步中至少 2 步的成熟 IC < 0 |
+| 排列检验 | ≥ 1000 次 block permutation（block = 21 天） |
+| 最小信号数 | n_signals ≥ 5 才报告点估计，≥ 20 才作为 tighten-only 依据 |
 | 敏感性 | 2-step / 3-step / 5-step 窗口 |
 
-**关键被说服点**：
-- Main R2：被Review说服从P1改为P0（命中窗口是FPR框架的前提参数）
-- Main R3：被DeepSeek说服将窗口从"标签持有期（20日）"改为"3个OOT step"
+**原因**：
+- CSRP 信号基于 6 个 OOT step 的连续 IC < 0，用 3 个 OOT step 验证中期趋势是否持续，时间尺度匹配
+- 仅用 IC < 0 作为命中标准会导致自相关下的自证预言（IC 自相关使"IC<0 之后 IC 继续<0"的概率天然偏高）
+- 组合收益 < benchmark 直接衡量投资者体验，是更合适的监控指标
+- block permutation 保留信号的时序聚类结构，简单 shuffle 会破坏 CSRP 信号的自相关
 
-### 分歧点3：裁剪与overlay执行顺序
+### 2. 分层裁剪与 capital overlay 执行顺序未定义
 
-**讨论过程**：四位在R1即一致为P0，无分歧。
+**问题**：§7.1 定义了分层裁剪规则，§9.3 定义了 capital overlay，但未规定两者的执行顺序。不同的执行顺序会导致不同的换手计算和最终权重。
 
-**最终共识：P0（4:0）**
+**修正建议**：
 
-**执行顺序**：
 ```
-Step 1: 模型生成目标权重（满仓，总和=1.0）
-Step 2: 分层裁剪（总换手→行业→个股），每层等比例缩减
-Step 3: 归一化到 1.0（裁剪后权重总和可能≠1.0）
-Step 4: 乘 capital_multiplier（牛市0.8-1.0 / 震荡0.4-0.7 / 熊市0-0.3）
+Step 1: 模型生成目标权重（满仓，总和 = 1.0）
+Step 2: 分层裁剪（总换手 → 行业 → 个股），每层等比例缩减
+Step 3: 归一化到 1.0
+Step 4: 乘 capital_multiplier（牛市 0.8-1.0 / 震荡 0.4-0.7 / 熊市 0-0.3）
 Step 5: 现金 = 1 - sum(w_final)
 ```
 
-**为什么必须先裁剪再overlay**：
-- 先overlay再裁剪会低估换手（DeepSeek R2给出反例）
-- 裁剪后归一化确保overlay的语义清晰（multiplier直接表示满仓比例）
-- 代码中用断言强制顺序
+代码中用断言强制顺序：`assert abs(sum(w_clipped) - 1.0) < 1e-6 before overlay`
 
-### 分歧点4：Sleeve FDR计入规则
+**原因**：
+- 先 overlay 再裁剪会低估换手。例如：旧权重 A=50%/B=50%，新权重 A=30%/B=70%，理想换手 = 40%。先 overlay (×0.5) 后换手被低估为 20%
+- 裁剪后归一化确保 overlay 的语义清晰：multiplier 直接表示满仓比例（0.8 = 80% 满仓）
+- 裁剪只影响股票间相对权重，overlay 只影响总敞口，两者互不干扰
 
-**讨论过程**：
-- R1：DeepSeek P0, Main P1, Review P1, Coder P1
-- R2：DeepSeek P0（BH阈值收紧5倍）, Review **改为P0**（被DeepSeek说服）, Main P1, Coder P1
-- R3：Main **改为P0**（被DeepSeek说服）, Coder **改为P0**（被DeepSeek说服）
+### 3. Sleeve FDR 计入规则未明确
 
-**最终共识：P0（4:0）**
+**问题**：§3.1.1 定义了 5 个分层 sleeve，但未明确 sleeve 的尝试是否计入 FDR 实验族。如果 5 个 sleeve 独立计入，BH 校正的 p 值阈值会收紧约 5 倍（从 0.02 降至 0.004）。这个影响不是"可控"的——p 值在 0.004-0.02 之间的因子会被淘汰。
 
-**关键被说服点**：
-- Main R3：DeepSeek的BH阈值计算（收紧5倍）证明"影响可控"是错误的
-- Review R3：用药物临床试验亚组类比——即使共享数据，5个亚组的假设检验仍需多重比较校正
-- Coder R3：自己的"共享test_family_id"方案实际上接受了阈值收紧，并未解决核心关切
+**修正建议**：
+- 所有 sleeve 的尝试计入 `attempt_count`，共享 `test_family_id`
+- BH 校正在整个实验族上执行
+- 实验报告必须披露："本次实验族包含 N 个 sleeve，BH 校正后的 p 值阈值为 X"
+- 如果 5× 收紧过于严格：减少 sleeve 数量，或使用 Storey-q 替代 BH
 
-**具体规则**：
-- 所有sleeve的尝试计入attempt_count，共享test_family_id
-- BH校正在整个实验族上执行
-- 实验报告必须披露："本次实验族包含N个sleeve，BH校正后的p值阈值为X"
-- 如果5×收紧过于严格，可减少sleeve数量或使用Storey-q
-
-### 分歧点5：Concept shift独立性假设
-
-**讨论过程**：
-- R1：DeepSeek P0, Review P0, Main P1, Coder P1
-- R2：DeepSeek **修正R1错误**（正自相关降低误报率，非升高）, 仍P0。Review P0（采纳修正）。Main P1, Coder P1
-- R3：Main承认计算错误但维持P1, Coder维持P1, DeepSeek和Review维持P0
-
-**最终结果：2:2分裂，Main裁决为P1（附严格条件）**
-
-**R2关键修正**：DeepSeek发现R1混淆了FPR和功效。正自相关在零假设下**降低**误报率（ρ=0.3时从10.9%降至~2-5%），5/6门槛比预期更保守。真正风险是功效不足（检测真实concept shift的能力降低）。
-
-**裁决理由**：
-- Main和Coder认为：功效不足不阻塞S1启动，可在OOT阶段通过block bootstrap动态调整
-- DeepSeek和Review认为：功效不足（80-85%漏报率）是系统性设计缺陷
-- 裁决：P1，但增加严格条件——必须在OOT报告中报告IC自相关和功效，如果功效<50%标注inconclusive
-
-**具体要求**：
-1. §4.1修正理论解释："5/6门槛的10.9%误报率基于步间独立假设。实际walk-forward中IC存在正自相关（因训练窗口重叠），正自相关**降低**零假设误报率（实际约2-5%），但同时降低检测真实concept shift的功效。"
-2. OOT报告必须同时报告IC lag-1自相关系数ρ
-3. 如果ρ > 0.3，用block bootstrap（block=21天，≥5000次重采样）估计实际误报率和功效
-4. 如果功效 < 50%，标注"inconclusive - insufficient power"，建议增加OOT步数或放宽门槛（如4/6）
-5. 在validation_params.json中记录`concept_shift_ic_autocorrelation_threshold: 0.3`
+**原因**：
+- FDR 校正的目的是控制"在所有被检验的假设中，错误拒绝零假设的比例"
+- 关键不是"是否独立训练模型"，而是"是否做出独立的 keep 决策"
+- 每个 sleeve 都是一个独立的假设（如"P80-P95 分段是否有 alpha"），即使共享同一个模型
+- 类比：药物临床试验中，即使共享同批数据，5 个亚组的假设检验仍需多重比较校正
 
 ---
 
-## 四、立场变化追踪
+## 二、需修正项（P1）
 
-### R2辩论轮立场变化（vs R1）
+### 4. MDE 功效分析缺失
 
-| Agent | 分歧点 | R1→R2变化 | 原因 |
+**问题**：文档在 §5.5、§9.1 中多处使用 24 步 OOT 做判断（exploratory tracking 的 65% 方向一致性、concept shift 的 5/6 门槛），但未评估 24 步 OOT 的统计功效。24 步 OOT 对年化 Sharpe = 0.5 的 alpha 功效仅约 17%，意味着 83% 的概率会漏掉一个真实的中等 alpha。
+
+**修正建议**：在 §5.5 增加功效分析表：
+
+| 年化 Sharpe | IC 均值 (σ=0.06) | 24 步功效 | 180 步功效 |
 |---|---|---|---|
-| Main | CSRP命中窗口 | P1→P0 | 被Review说服：命中窗口是FPR框架前提参数 |
-| Review | Sleeve FDR | P1→P0 | 被DeepSeek说服：BH阈值收紧5倍 |
-| DeepSeek | Concept shift | 修正方向 | 发现R1错误：自相关降低误报率，非升高 |
+| 0.3 | 0.0052 | 8.5% | 28% |
+| 0.5 | 0.0087 | 17.4% | 58% |
+| 0.8 | 0.0139 | 32.6% | 87% |
+| 1.0 | 0.0173 | 43.3% | 95% |
+| 1.5 | 0.0260 | 68.8% | 99.7% |
 
-### R3回应轮立场变化（vs R2）
+同时在 validation_params.json 中记录 MDE 分析的假设和结论。
 
-| Agent | 分歧点 | R2→R3变化 | 原因 |
-|---|---|---|---|
-| Main | Sleeve FDR | P1→P0 | 被DeepSeek说服：BH阈值收紧5倍不是"可控"影响 |
-| Coder | MDE | P0→P1 | 被Main/Review说服：keep基于完整180步OOT |
-| Coder | Sleeve FDR | P1→P0 | 被DeepSeek说服：共享test_family_id未解决核心关切 |
-| DeepSeek | MDE | P0→P1+ | 接受"keep基于完整OOT"论点，但坚持补充功效表 |
+**原因**：
+- 24 步 OOT 是最低验收门槛（smoke test），不是总步数。完整 OOT 约 180 步，功效充足
+- 功效分析不阻塞 S1 启动，但量化了框架的能力边界，影响对 smoke test 结果的解读方式
+- 如果 smoke test 不通过但完整 OOT 的 MDE 低于预期 alpha，应等待更多步数而非立即放弃
 
-### 被说服次数统计
+### 5. Concept shift 5/6 门槛的理论解释需修正
 
-| Agent | 被说服改变立场次数 | 被说服的具体点 |
+**问题**：§4.1 声称 5/6 yellow 门槛的误报率为 10.9%，基于 IC 步间独立假设（二项分布）。但 walk-forward 中 IC 存在正自相关（因训练窗口 95% 重叠），正自相关**降低**零假设误报率（实际约 2-5%），但同时降低检测真实 concept shift 的功效。文档当前的理论解释方向有误。
+
+**修正建议**：§4.1 增加说明：
+
+> "5/6 yellow 门槛的 10.9% 误报率基于 IC 步间独立假设。实际 walk-forward 中 IC 存在正自相关（因训练窗口重叠），正自相关**降低**极端序列（连续 5-6 步同号）的概率，实际误报率约 2-5%（比预期更保守）。但正自相关同时降低检测真实 concept shift 的功效——6 步窗口在自相关下可能不足以检测渐进式策略失效。"
+
+OOT 报告中必须同时报告 IC lag-1 自相关系数 ρ。如果 ρ > 0.3：
+- 用 block bootstrap（block = 21 天，≥ 5000 次重采样）估计实际误报率和功效
+- 如果功效 < 50%，标注 "inconclusive - insufficient power"，建议增加 OOT 步数或放宽门槛（如 4/6）
+
+**原因**：
+- 正自相关使 IC 序列更"平滑"，在零假设下更难出现连续 5-6 步同号的极端聚集
+- 但正自相关也使 IC 变化更慢，真实 concept shift 发生时 6 步内可能只有 3-4 步为负，无法触发告警
+- 功效不足（漏报）比误报率偏高（过度告警）更危险——过度告警只触发报告，漏报意味着策略在 regime change 中继续运行而不被告警
+- 功效不足时应**放宽**门槛（如 4/6）来提高检测能力，而非收紧（如 6/6）
+
+### 6. SQLite 实验台账缺少 schema 定义
+
+**问题**：§11 提及 SQLite WAL 实验台账，但未给出 CREATE TABLE 语句、索引定义和 WAL 配置。没有 schema 定义，无法实现。
+
+**修正建议**：补充 `experiment_runs` 表的 schema，至少包含：
+- `run_id TEXT PRIMARY KEY`
+- `test_family_id TEXT`
+- `track_id TEXT`
+- `sleeve_id TEXT`（默认 NULL）
+- `factor_id TEXT`
+- `label_id TEXT`
+- `model_id TEXT`
+- `trial_index_in_family INTEGER`
+- `ic_mean REAL`
+- `ic_pvalue REAL`
+- `bh_adjusted_pvalue REAL`
+- `keep_decision TEXT`
+- `created_at TEXT`
+
+配置 `PRAGMA journal_mode=WAL` 和 `PRAGMA synchronous=NORMAL`。
+
+**原因**：schema 是实现的前提，没有 schema 无法写入实验记录，也无法执行 BH 校正。
+
+### 7. IC 自相关报告要求
+
+**问题**：OOT 报告中未要求报告 IC lag-1 自相关系数。IC 自相关影响 concept shift 门槛的实际误报率和功效，不报告则无法评估门槛的可靠性。
+
+**修正建议**：在 §9.1.5 增加：OOT 报告必须同时报告 IC lag-1 自相关系数 ρ。如果 ρ > 0.3，触发 block bootstrap 功效分析。
+
+**原因**：IC 自相关是 concept shift 检测的关键参数，直接影响 5/6 门槛的实际行为。
+
+### 8. ModelRegistry 持久化方案缺失
+
+**问题**：§8.4 提及 ModelRegistry 管理 refit/rebalance 不同步，但未给出持久化方案（SQLite + 文件系统）和 artifact 存储结构。
+
+**修正建议**：补充 ModelRegistry 的存储结构：
+- SQLite 表存储模型元数据（model_id、track_id、refit_date、rebalance_date、artifact_path）
+- 文件系统存储模型 artifact（pickle/joblib），路径写入 SQLite
+
+**原因**：没有持久化方案，refit 和 rebalance 的不同步管理无法实现。
+
+### 9. Sleevecross 比较应计入 FDR
+
+**问题**：§5.1 未明确 sleeve 间的交叉比较（如微盘 vs 大盘 sleeve 的 IC 差异）是否计入 FDR。
+
+**修正建议**：sleeve 共享基础因子方向的 `test_family_id`，不独立成族。但 sleeve 间的交叉比较（IC 差异检验）应作为独立假设计入 FDR。
+
+**原因**：sleeve 间比较是一个新的假设检验，即使底层模型相同。
+
+---
+
+## 三、文档一致性确认
+
+以下项目在两份文档中已一致，无需修改：
+
+| 检查项 | 状态 |
+|---|---|
+| purge 规则（20日标签=60天，1日标签=20天） | ✅ 一致 |
+| OOT 步数（24步为smoke test，~180步为完整验证） | ✅ 一致 |
+| Concept shift 阈值（5/6步触发yellow） | ✅ 一致 |
+| 因子方向 Tier 1/2/3 | ✅ 一致 |
+| Phase A0 拆分（A0.1 + A0.2） | ✅ 一致 |
+| 实验台账（SQLite WAL） | ✅ 一致 |
+| 半衰期（12月默认，18月敏感性，6/24诊断） | ✅ 一致 |
+| GMSL（S1报告，S1.5审计，S3后tighten-only） | ✅ 一致 |
+| Block bootstrap 敏感性（10/21/42日） | ✅ 一致 |
+| 新ey-West 带宽（Andrews + lag 6 + lag 12） | ✅ 一致 |
+
+---
+
+## 四、修正优先级
+
+| 优先级 | 修正项 | 预计工作量 |
 |---|---|---|
-| Main | 2次 | CSRP P1→P0, Sleeve FDR P1→P0 |
-| Review | 1次 | Sleeve FDR P1→P0 |
-| DeepSeek | 1次 | MDE P0→P1+ |
-| Coder | 2次 | MDE P0→P1, Sleeve FDR P1→P0 |
+| P0 | CSRP 命中窗口定义 | 补充一段定义 |
+| P0 | 裁剪与 overlay 执行顺序 | 补充一段定义 + 代码示例 |
+| P0 | Sleeve FDR 计入规则 | 补充一段定义 |
+| P1 | MDE 功效分析表 | 补充一个表格 + 一段说明 |
+| P1 | Concept shift 理论修正 | 修改 §4.1 的理论解释段落 |
+| P1 | SQLite schema DDL | 补充 CREATE TABLE 语句 |
+| P1 | IC 自相关报告要求 | 在 §9.1.5 增加一句要求 |
+| P1 | ModelRegistry 持久化 | 补充存储结构说明 |
+| P1 | Sleeve 间比较 FDR | 在 §5.1 增加一句说明 |
 
 ---
 
-## 五、综合评分
-
-| 维度 | 评分 | 说明 |
-|---|---|---|
-| 上一轮共识采纳 | 9.5/10 | 11/11全部正确采纳 |
-| 新增内容质量 | 8.5/10 | sleeve/overlay/CSRP/ET设计合理，R2+R3补充了关键细节 |
-| 统计严谨性 | 8.5/10 | R2修正了concept shift误报率误解，R3明确了MDE功效边界 |
-| 文档一致性 | 9.0/10 | 总纲与执行规范高度一致 |
-| 文档完备性 | 8.5/10 | R2+R3发现了5个需补充的P0细节 |
-| 讨论质量 | 9.0/10 | 真正的多轮辩论，4次被说服改变立场，3个关键纠正 |
-| **综合评分** | **8.8/10** | **从上一轮8.1/10提升至8.8/10** |
-
----
-
-## 六、待改进项清单
-
-### P0（3项，已达成共识，需文档补充）
-
-| # | 问题 | 共识来源 | 建议修复 |
-|---|---|---|---|
-| 1 | CSRP命中窗口定义 | R2+R3 4:0共识 | §9.1.5增加：主口径=3个OOT step，组合收益<基准，排列检验≥1000次 |
-| 2 | 裁剪与overlay执行顺序 | R1 4:0共识 | §7.1+§9.3增加：裁剪→归一化→overlay，代码断言强制 |
-| 3 | Sleeve FDR计入规则 | R2+R3 4:0共识 | §5.1增加：sleeve共享test_family_id，BH校正在整个实验族执行 |
-
-### P1（6项，建议补充）
-
-| # | 问题 | 共识来源 | 建议修复 |
-|---|---|---|---|
-| 1 | MDE功效分析 | R3 4:0共识 | §5.5增加功效表（24步/180步对不同Sharpe的检测功效） |
-| 2 | Concept shift理论修正 | R2+R3裁决 | §4.1修正：正自相关降低误报率（2-5%），但降低功效 |
-| 3 | IC自相关报告 | R2+R3裁决 | OOT报告必须报告IC lag-1自相关，ρ>0.3时估计功效 |
-| 4 | SQLite schema DDL | Coder R1 | §11补充CREATE TABLE+索引+WAL配置 |
-| 5 | ModelRegistry持久化 | Coder R1 | §8.4补充SQLite+文件系统方案 |
-| 6 | Sleevecross比较计入FDR | DeepSeek R2 | §5.1增加：sleeve间IC差异比较计入FDR |
-
----
-
-## 七、讨论中的关键纠正
-
-### 纠正1：Concept shift 误报率方向错误（DeepSeek R2）
-
-**R1错误**：DeepSeek声称正自相关导致误报率从10.9%升高到33%
-**R2修正**：正自相关**降低**零假设误报率（ρ=0.3时从10.9%降至~2-5%），R1混淆了FPR和功效
-**影响**：5/6门槛比预期更保守（好消息），但检测真实concept shift的功效降低（坏消息）
-
-### 纠正2：CSRP窗口长度不匹配（DeepSeek R2→R3）
-
-**R1-R2错误**：Main建议命中窗口=标签持有期（20日）
-**R2修正**：DeepSeek指出CSRP信号基于6个OOT step（~6个月），用20日窗口验证6个月的恶化趋势不匹配。应改为3个OOT step（~3个月）
-
-### 纠正3：Sleeve FDR影响被低估（DeepSeek R2→R3）
-
-**R1-R2错误**：Main认为"sleeve不独立训练模型，对FDR影响可控"
-**R2修正**：DeepSeek计算BH阈值收紧5倍（从0.02到0.004），证明不是"可控"影响。Review用药物临床试验亚组类比进一步说明
-
-### 纠正4：MDE功效边界被忽视（DeepSeek R1→R2）
-
-**R1发现**：24步OOT对Sharpe=0.5的alpha功效仅17%
-**R3共识**：四位一致接受P1——MDE不阻塞S1启动，但必须在文档中补充功效分析表
-
-### 纠正5：功效不足时应放宽门槛而非收紧（Review R3）
-
-**Main R2错误**：建议"如果ρ>0.3，考虑更严格门槛（如6/6）"
-**Review R3修正**：功效不足时应**放宽**门槛（如4/6）来提高检测能力，而非收紧
-
----
-
-## 八、最终结论
-
-**文档质量：8.8/10（优秀）**
-
-更新后的文档成功采纳了上一轮全部11项共识。通过R1独立审计→R2辩论→R3回应的真正多轮讨论，5个分歧点中4个达成共识（MDE、CSRP命中窗口、裁剪与overlay顺序、Sleeve FDR），1个（Concept shift）以2:2裁决解决。
-
-**R2+R3的关键贡献**：
-1. DeepSeek修正了concept shift误报率方向错误（自相关降低误报率，非升高）
-2. DeepSeek提供了完整的MDE功效计算框架（24步/180步对不同Sharpe的检测功效）
-3. Review纠正了"功效不足时应收紧门槛"的方向错误（应放宽）
-4. 四位一致同意Sleeve FDR计入规则（BH阈值收紧5倍不是"可控"影响）
-
-**建议**：
-1. 优先修复3个P0（CSRP命中窗口、裁剪与overlay顺序、Sleeve FDR计入规则）
-2. 补充6个P1（MDE功效表、Concept shift理论修正、IC自相关报告、SQLite schema、ModelRegistry、sleeve间比较FDR）
-3. 修复后文档质量可达到9.0/10
-
----
-
-*报告生成时间：2026-05-01 13:06 CST*
-*审计流程：R1四位独立审计 → R2辩论（互相challenge） → R3回应（被说服/坚持） → 共识产出*
-*R1平均分：8.1 → R2辩论后：8.5 → R3回应后：8.8/10*
-*被说服改变立场：共6次（Main 2次、Review 1次、DeepSeek 1次、Coder 2次）*
-*关键纠正：5个（concept shift方向、CSRP窗口长度、Sleeve FDR影响、MDE功效边界、门槛方向）*
+*评审完成时间：2026-05-01 13:24 CST*
