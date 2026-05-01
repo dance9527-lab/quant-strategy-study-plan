@@ -9,7 +9,7 @@
 
 ### 1.1 已经可用的数据底座
 
-`D:\data\warehouse` 已形成 canonical 数据底座、P1 数据前置产物、feature-label 面板和 source-status 审计产物。数据事实以 Git 项目中的 `warehouse_build_manifest.json`、`DATA_USAGE_GUIDE.md`、`WAREHOUSE_README.md`、`external_data_sources.csv` 和关键 audit hash 为准；策略文档不再把手工复制行数当作单一权威。最近一次检查：
+`D:\data\warehouse` 已形成 canonical 数据底座、P1 数据前置产物、feature-label 面板和 source-status 审计产物。数据事实以 Git 项目中的 `warehouse_build_manifest.json`、`DATA_USAGE_GUIDE.md`、`WAREHOUSE_README.md`、`external_data_sources.csv` 和关键 audit hash 为准；策略文档不再把静态摘录行数当作单一权威。最近一次检查：
 
 - `D:\data\warehouse\audit_reports\leakage_check_report.json`
 - `checked_at=2026-04-30 09:48:02`
@@ -245,9 +245,9 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 - **训练权重**：指数衰减是单轨训练权重候选；默认半衰期 12 个月，等权 5 年 rolling 必须作为对照，18 个月作为预注册敏感性；6/24 个月为必报诊断，36 个月为可选研究网格，不得用 OOT/holdout 择优。
 - **主线 cadence**：S1-M 月选股默认 20 日标签、固定月末/月初调仓，是近期唯一正式 alpha keep 主线；21 日滚动为敏感性。S1-D/S1-R 默认 1/5 日标签、每日盘后输出候选分数、风险预警、GMSL shock state 和执行审计，是正式日频风险/执行主线，但不进入近期主动 alpha 调仓或 official keep。
 - **模型重训频率**：默认 63 个交易日重训；S1-M 默认固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 每日重算分数、告警和执行审计但不默认每日重训；非重训 step 使用最近一次冻结模型。
-- **OOT steps**：S1-M 预备 smoke/minimum 为**24步 + 分年度分析**；完整验证必须按 2005-2026 月末/月初 calendar、扣除 holdout 后计算全量 OOT/rebalance 步数，当前粗略预期约 180 步，实际以 `walk_forward_calendar_v1` 为准。S1-D/S1-R 不能把 24 步写成充分日频证据；report-only 风险监控至少 252 个成熟日度决策日，tighten-only 生产规则至少 504 个成熟日、24 个自然月桶和 8 个季度桶，并同时报告日/周/月/季聚合。
+- **OOT steps**：S1-M 预备 smoke/minimum 为**24步 + 分年度分析**；完整验证必须按 2005-2026 月末/月初 calendar、扣除 holdout 后计算全量 OOT/rebalance 步数，并以 `walk_forward_calendar_v1` 生成值为准。S1-D/S1-R 不能把 24 步写成充分日频证据；report-only 风险监控至少 252 个成熟日度决策日，tighten-only 生产规则至少 504 个成熟日、24 个自然月桶和 8 个季度桶，并同时报告日/周/月/季聚合。
 - **walk-forward 起始和总步数**：主窗口从 2005-01-01 开始，首个 OOT 起点约为 2010 年；24 步只是最低验收门槛，实际总步数按交易日历和最后 12 个月 holdout 剔除后计算并披露。
-- **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65**、bootstrap p **<0.10**、最后 12 个月 holdout 至少满足方向一致、成本后超额 > 0、Sharpe > 0、MaxDD/CVaR 不显著差于 benchmark 或等权控制、单月利润贡献不超过 50%，且订单失败/成本/容量在预注册边界内；若 HAC 与 bootstrap 只有一项通过，状态为 `inconclusive` 而不是 keep。Soft Floor 包括换手、年度/市场状态稳定性和复杂模型相对简单基线增量；尾部风险必须报告并执行预注册 fatal check，未触发 fatal 才能进入 keep/晋级。
+- **S1门槛分层**：Hard Gate 包括审计通过、Newey-West HAC 调整后的 IC t-stat **≥1.65**、bootstrap p **<0.10**、最后 12 个月 holdout 至少满足方向一致、成本后超额 > 0、Sharpe > 0、MaxDD/CVaR 不显著差于 benchmark 或等权控制、单月利润贡献不超过 50%，且订单失败/成本/容量在预注册边界内；若 HAC 与 bootstrap 只有一项通过，状态为 `inconclusive` 而不是 keep。Soft Floor 包括换手、年度/市场状态稳定性和高容量模型相对简单基线的增量；尾部风险必须报告并执行预注册 fatal check，未触发 fatal 才能进入 keep/晋级。
 - **IC显著性**：IC t-stat 默认使用 **Newey-West HAC** 调整；必须报告默认公式、Andrews (1991)、lag 6 和 lag 12 四种带宽敏感性，keep/晋级取最保守结论；未调整 t-stat 只能作为诊断值。
 - **bootstrap方法**：**Block Bootstrap, block=max(label_horizon, rebalance_interval)**，月选股 20 日标签默认 block=21 日；必须报告 10/21/42 日敏感性，晋级或生产 tighten-only 使用最保守结论，≥5000次重抽样。
 - **多重检验**：FDR 覆盖完整实验族，而不是只按因子列数触发；当因子 × 标签 × 模型 × 半衰期 × 训练窗口 × 正交化分支 × 执行规则的累计尝试数超过 20 时，默认使用 Benjamini-Hochberg。若因子相关性高或有效假设数不清晰，必须补充 Storey-q 诊断，并记录相关性触发指标、有效假设数、Storey-q、`test_family_id` 和跨 family 累计 `attempt_count`。进入 keep/晋级时 FDR 为硬约束。
@@ -290,7 +290,7 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
   - P1：valuation 缺口三口径敏感性、benchmark 覆盖审计、ADV 新股不足标记、validation 参数 hash。
   - P1：concept shift 诊断和成熟 IC yellow/red 状态机预注册，随 S1 输出但不放宽 hard gate。
   - 非阻塞 S1：ADWIN/BOCPD 等额外变点诊断、6/24/36 月半衰期研究网格；均不得进入 keep 决策。
-- 24 步仅是最低验证规模和快速 smoke；完整主证据按交易日历生成全量 OOT step，需单独估算耗时。
+- 24 步仅是最低验证规模和快速 smoke；完整主证据按交易日历生成全量 OOT step，并记录实际 step 数、样本覆盖和产物 hash。
 
 ## 6. 禁止事项
 
@@ -307,7 +307,7 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 9. 在没有基线对照的情况下引入深度学习、NLP 或 RL。
 10. 在文档中承诺未经实证的高收益、Sharpe 或胜率。
 11. 把双轨 Track A/B、动态 alpha 或在线 Track B 作为 S1/S1.5 近期执行路径。
-12. 让人工主观判断决定模型切换、参数选择、候选 keep 或告警处置；所有处置必须来自预注册数据规则。
+12. 让临场主观判断决定模型切换、参数选择、候选 keep 或告警处置；所有处置必须来自预注册数据规则。
 13. 把 stress slice、2024-02、post-2023 或全面注册制后样本作为选模窗口；这些只能作为预注册诊断和风险审计。
 14. 用行级样本数扩张造成的近期股票数偏差冒充 concept shift 适配。
 15. 只用自有参与率判断拥挤容量，不报告因子重叠、左尾、跌停未成交和市场成交额占比。
@@ -318,14 +318,14 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 
 ---
 
-## 7. 近期行动路线
+## 7. 执行路线
 
 ### Phase A0：S1-M alpha 主线与 S1-D/S1-R 风险执行主线共享审计和日历固化
 
-Phase A0 预计 25-45 个工作日，拆成 A0.1 和 A0.2：
+Phase A0 按阻塞关系拆成 A0.1 和 A0.2：
 
-- **A0.1，阻塞 S1 启动，预计 2-3 周**：`track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`validation_params.json` 参数 hash、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计。
-- **A0.2，阻塞 S1 keep，预计 3-6 周**：`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、SQLite WAL `experiment_ledger`、factor direction registry、ModelRegistry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` 和数据版本 hash 机制。
+- **A0.1，阻塞 S1 启动**：`track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`validation_params.json` 参数 hash、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计。
+- **A0.2，阻塞 S1 keep**：`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、SQLite WAL `experiment_ledger`、factor direction registry、ModelRegistry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` 和数据版本 hash 机制。
 
 目标：为 S1-M 月选股正式 alpha 主线建立可复现、可审计的启动底座，并为 S1-D/S1-R 日频风险/执行主线固化独立登记、日历、GMSL shock-state、execution label 和离线审计接口。
 
