@@ -1,17 +1,13 @@
 {
-  "version": "2026-05-01-r13-consensus-r11-hardening",
+  "version": "2026-05-01-execution-governance-hardening",
   "scope": "official_strategy_evidence",
-  "consensus_sources": [
-    "consensus_audit_report_20260430.md",
-    "consensus_audit_round2.md",
-    "consensus_audit_r3.md",
-    "consensus_audit_r4.md",
-    "consensus_audit_r5.md",
-    "consensus_audit_r6.md",
-    "a_share_quant_strategy_plan_audit_report.md",
-    "consensus_audit_r10.md",
-    "consensus_audit_r11.md",
-    "a_share_quant_strategy_plan_updated_audit_report_20260430.md"
+  "parameter_basis": [
+    "quant_strategy_plan.md",
+    "quant_strategy_research_plan_detailed.md",
+    "DATA_USAGE_GUIDE.md",
+    "WAREHOUSE_README.md",
+    "external_data_sources.csv",
+    "warehouse_build_manifest.json"
   ],
   "data_governance": {
     "warehouse_build_manifest_required": true,
@@ -118,7 +114,7 @@
     },
     "strategy_docs_must_reference_manifest_not_manual_row_counts": true,
     "features_and_labels_must_be_built_before_training": true,
-    "features_and_labels_current_status": "built_r7_market_daily_v1_and_forward_returns_v1",
+    "features_and_labels_current_status": "market_daily_v1_and_forward_returns_v1_built",
     "feature_panel_artifact": "features/market_daily_v1",
     "label_panel_artifact": "labels/forward_returns_v1",
     "feature_label_panel_rows": 15420654,
@@ -126,7 +122,7 @@
     "pit_feature_audit_file": "audit_reports/pit_feature_audit_market_daily_v1.json",
     "label_audit_file": "audit_reports/label_audit_forward_returns_v1.json",
     "source_status_field_audit_required": true,
-    "source_status_field_audit_status": "r7_required_columns_present",
+    "source_status_field_audit_status": "required_columns_present",
     "source_status_audit_file": "audit_reports/source_status_audit_r7.json",
     "corporate_action_sanity_file": "audit_reports/corporate_action_adjustment_sanity_report.json",
     "experiment_status_enum": [
@@ -164,7 +160,7 @@
     "gmsl_source_fetch_status_file": "audit_reports/gmsl_source_fetch_status.csv",
     "gmsl_sources_current_status": "candidate_etl_partial_cboe_vix_ovx_gvz_ingested_fred_configured_series_timed_out",
     "gmsl_must_not_enter_alpha_keep_before_pit_timezone_coverage_audit": true,
-    "gmsl_source_fetch_attempt_status": "2026-04-30_fred_fredgraph_all_configured_series_timed_out_cboe_vix_ovx_gvz_ok",
+    "gmsl_source_fetch_attempt_status": "fred_fredgraph_all_configured_series_timed_out_cboe_vix_ovx_gvz_ok",
     "gmsl_partial_success_sources": [
       "CBOE_VIX",
       "CBOE_OVX",
@@ -442,7 +438,7 @@
   },
   "label_rules": {
     "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
-    "qant_10d_legacy_note": "Earlier qant deep-dive experiments used purge_days=10 to isolate the known 10-day label leak. New official evidence must use the stricter Round 5/round2 rule max(horizon*3,40) unless a narrower diagnostic run is explicitly labeled as exploratory and excluded from keep decisions.",
+    "qant_10d_legacy_note": "Historical qant diagnostic experiments may use purge_days=10 only when explicitly labeled exploratory and excluded from keep decisions. New official evidence must use max(horizon*3,40).",
     "purge_sensitivity_days": [
       40,
       60,
@@ -511,7 +507,7 @@
     "statistical_conflict_policy": "hac_and_block_bootstrap_both_required_for_keep; if_only_one_passes_status_inconclusive_not_keep",
     "hac_bootstrap_conflict_examples": [
       "hac_t_stat_ge_1_65_and_bootstrap_p_ge_0_10_is_inconclusive",
-      "hac_t_stat_lt_1_65_and_bootstrap_p_lt_0_10_is_inconclusive_pending_preregistered_sensitivity_review"
+      "hac_t_stat_lt_1_65_and_bootstrap_p_lt_0_10_is_inconclusive_pending_preregistered_sensitivity_check"
     ],
     "purge_marginal_benefit_report_required": true,
     "purge_sensitivity_days": [
@@ -639,8 +635,8 @@
   },
   "trading_cost_policy": {
     "cost_table": "trading_costs/equity_cost_history.parquet",
-    "r10_current_round_trip_cost": 0.00206,
-    "r10_current_round_trip_cost_percent": 0.206,
+    "current_round_trip_cost": 0.00206,
+    "current_round_trip_cost_percent": 0.206,
     "current_cost_date": "2026-04-27",
     "current_buy_cost": 0.00078,
     "current_sell_cost": 0.00128,
@@ -752,7 +748,7 @@
     }
   },
   "training_weighting": {
-    "status": "r10_single_track_weighting_policy",
+    "status": "single_track_weighting_policy",
     "equal_weight_control_required": true,
     "default_scheme": "row_equal_decay",
     "default_half_life_months": 12,
@@ -765,7 +761,7 @@
     "preregistered_keep_sensitivity_half_life_months": [
       18
     ],
-    "r10_diagnostic_half_life_months": [
+    "diagnostic_half_life_months": [
       6,
       24
     ],
@@ -774,8 +770,8 @@
       24,
       36
     ],
-    "selection_rule": "default_12m_row_equal_decay_primary; 18m_preregistered_keep_sensitivity; 6m_24m_r10_diagnostic_report_only; 36m_optional_research_grid; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
-    "r10_diagnostic_half_life_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
+    "selection_rule": "default_12m_row_equal_decay_primary; 18m_preregistered_keep_sensitivity; 6m_24m_diagnostic_report_only; 36m_optional_research_grid; date_balanced_decay_is_required_control; any alternate half_life_or_window_must_be_selected_by_nested_training_only_not_oot_or_holdout",
+    "diagnostic_half_life_role": "report_only_counts_toward_attempt_count_not_keep_or_selection",
     "sample_weight_formula": "row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))",
     "required_weighting_schemes": [
       "equal_weight_5y_control",
@@ -910,7 +906,7 @@
       "yellow_action": "flag_candidate_and_require_equal_weight_vs_decay_and_segment_report",
       "red_action": "quarantine_new_keep_or_promotion_until_next_pre_registered_revalidation_passes",
       "current_step_action_forbidden": true,
-      "human_review_required": false
+      "human_intervention_required": false
     },
     "optional_diagnostic_tests": {
       "break_tests": [
@@ -986,7 +982,7 @@
     }
   },
   "adaptive_training": {
-    "status": "deprecated_by_r5",
+    "status": "not_allowed_current_protocol",
     "allowed": false,
     "forbidden_schemes": [
       "two_track_track_a_track_b",
@@ -1034,7 +1030,7 @@
     ]
   },
   "data_warehouse_supplement_plan": {
-    "status": "planned_not_executed_in_r12",
+    "status": "planned_requires_explicit_execution_instruction",
     "execute_without_user_instruction": false,
     "priority_layers": [
       {

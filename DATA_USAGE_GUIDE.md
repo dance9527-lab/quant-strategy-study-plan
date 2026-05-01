@@ -53,9 +53,9 @@
 - `factor_after_last_bar_assets=255` 表示部分证券复权因子最后日期晚于最后一根日 K bar。这通常是停牌、退市或无成交 bar 后仍有因子记录；不能把因子存在解释为可交易。
 - `return_adjusted_pit` 和未复权日 K 行数一致，说明收益表没有因复权因子重复日期而放大。
 - 交易日历包含 2026-04-28 之后的开市日，但本地日 K 和复权因子最新到 2026-04-27；`calendar.is_data_available` 已区分这一点。
-- `reference_rates` 已在 P1 前置更新中追加 9 条 Shibor 序列。第五轮 AkShare 接入阶段的 “Shibor 后续修复” 说明已被 P1 更新取代。
-- R7 已生成 `features/market_daily_v1` 与 `labels/forward_returns_v1`，各 15,420,654 行，覆盖 2005-2026，并登记 `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json` 和 `label_audit_forward_returns_v1.json`。这只解除“面板未入仓”阻塞；官方 S1 训练仍必须先固化 walk-forward calendar、holdout log、测试族台账、execution label audit 和实验登记。
-- R11 已初始化 `global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar` 三张 GMSL candidate 表，并生成 `gmsl_manifest.json`、`gmsl_timezone_available_at_audit.json`、`gmsl_source_fetch_status.csv` 和 `gmsl_coverage_report.csv`。2026-04-30 实际尝试抓取 FRED `fredgraph.csv` 配置源，所有 FRED series 均因 `ReadTimeout` 失败；同轮 Cboe 官方 VIX/OVX/GVZ CSV 抓取成功，`global_macro_daily` 形成 17,526 行，`gmsl_shock_state` 形成 9,176 行。GMSL 仍不能作为可用 alpha 输入，只能作为 source registry、stress report、时区审计和后续 PIT/coverage 审计框架。
+- `reference_rates` 已追加 9 条 Shibor 序列；早期固定利率 fallback 说明不再代表当前 reference rate 状态。
+- `features/market_daily_v1` 与 `labels/forward_returns_v1` 已生成，各 15,420,654 行，覆盖 2005-2026，并登记 `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json` 和 `label_audit_forward_returns_v1.json`。这只解除“面板未入仓”阻塞；官方 S1 训练仍必须先固化 walk-forward calendar、holdout log、测试族台账、execution label audit 和实验登记。
+- `global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar` 三张 GMSL candidate 表已初始化，并生成 `gmsl_manifest.json`、`gmsl_timezone_available_at_audit.json`、`gmsl_source_fetch_status.csv` 和 `gmsl_coverage_report.csv`。FRED `fredgraph.csv` 配置源实际抓取全部 `ReadTimeout`；Cboe 官方 VIX/OVX/GVZ CSV 抓取成功，`global_macro_daily` 形成 17,526 行，`gmsl_shock_state` 形成 9,176 行。GMSL 仍不能作为可用 alpha 输入，只能作为 source registry、stress report、时区审计和后续 PIT/coverage 审计框架。
 
 ## 数据可用状态分层
 
@@ -63,16 +63,16 @@
 
 | 状态 | 含义 | 当前示例 | 使用限制 |
 |---|---|---|---|
-| `available_now` | 已在 warehouse 或 manifest 镜像中可用，但仍受用途限制 | 日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、R7 market-only features/forward labels、核心 source status 字段 | 可用于 S1 market-only 研究准备；正式训练仍需 walk-forward calendar、holdout log、PIT/label/benchmark audit hash、execution label audit 和实验登记。 |
+| `available_now` | 已在 warehouse 或 manifest 镜像中可用，但仍受用途限制 | 日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、market-only features/forward labels、核心 source status 字段 | 可用于 S1 market-only 研究准备；正式训练仍需 walk-forward calendar、holdout log、PIT/label/benchmark audit hash、execution label audit 和实验登记。 |
 | `candidate_etl` | 只完成 source registration、局部抓取、空表初始化或计划接入 | 融资融券、北向、限售解禁、ETF flow、市场宽度、股指期货 basis/OI、财报、分钟/集合竞价、AkShare 公司行为 sanity reference、GMSL 外生冲击源 | 只可做 ETL、覆盖率、PIT、timezone/session cutoff 和质量审计；未完整入仓前不得进入官方 S1 keep。 |
 | `missing` | 应有但当前没有可审计主表或字段 | walk-forward calendar、holdout access log、测试族台账、execution label audit、完整公司行为主表 | 阻塞相关训练、字段结论或正式 evidence。 |
 | `blocked_by_source_gap` | 需要官方、授权或可靠历史源，不是简单 ETL 能解决 | 沪/北历史 ST、全历史官方停复牌、历史 PIT 指数成分权重、完整独立公司行为主表 | 必须披露 source gap；不得用当前快照、近期局部源或推断表冒充完整 PIT。 |
 
 Git 项目中的依据文档和 `warehouse_build_manifest.json` 是当前策略文档事实源。`D:\data\warehouse` 根目录下同名说明文件若滞后于 Git 镜像，不得覆盖 manifest 和本地 audit JSON 的结论。
 
-R11 响应矩阵：
+当前执行边界：
 
-| R11 关注点 | 当前状态 | 使用边界 |
+| 关注点 | 当前状态 | 使用边界 |
 |---|---|---|
 | P1 market-only 因子库 | `features/market_daily_v1` 已覆盖动量、反转、波动率、流动性/换手、ADV、规模、市值慢变量、可交易性和 PIT 行业字段 | 可用于 S1-M/S1-D/S1-R 研究准备；正式 keep 前仍需 factor library registry、walk-forward calendar、holdout log 和实验登记 |
 | 数据质量和幸存者偏差 | 历史证券和退市样本已进入 `security_master`/行情面板，但退市日期、退市前收益和三层 universe 仍未单独审计 | `is_delisted` 只能说明样本存在；不能宣称幸存者偏差闭环 |
@@ -86,15 +86,15 @@ R11 响应矩阵：
 - warehouse 核心表字段里的 `source_status` 是表内 source/time/status 审计字段，和 source registry 的 `status` 列不是同一概念。
 - source registry 当前已经扩展为 21 列；`schema_hash`、`source_vendor`、`raw_location`、`build_script`、`update_sla` 等字段允许对 planned-only 或 blocked source 暂空，但任何 `available_now` 或已产生候选行的 `candidate_etl` 在升格前必须补齐 vendor/license、warehouse table、timezone/session cutoff、quality report、schema hash 或 schema registry hash。
 
-## R12 数据补充规划（暂不执行）
+## 后续数据补充规划
 
-本节只给出后续 data warehouse 收集、整理、清洗和审计方案；R12 复核不执行新增外部抓取或入仓。
+本节只给出后续 data warehouse 收集、整理、清洗和审计方案；未获明确执行指令前不新增外部抓取或入仓。
 
 | 优先级 | 补充对象 | 主要产物 | 清洗和审计要点 | 未完成影响 |
 |---|---|---|---|---|
-| P0 governance | 验证治理工件 | `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、`experiment_ledger` | 由交易日历、R7 panel hash 和 `validation_params.json` 生成；记录 computed purge、label maturity、holdout flag、attempt count、FDR 方法、HAC/bootstrap 冲突状态、冻结模型版本、访问日志和参数 hash；holdout log 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；burned holdout 后需要不少于 252 个交易日 shadow/forward OOS | 阻塞官方 S1 主证据和 holdout 最终验收 |
+| P0 governance | 验证治理工件 | `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、`experiment_ledger` | 由交易日历、feature/label panel hash 和 `validation_params.json` 生成；记录 computed purge、label maturity、holdout flag、attempt count、FDR 方法、HAC/bootstrap 冲突状态、冻结模型版本、访问日志和参数 hash；holdout log 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；burned holdout 后需要不少于 252 个交易日 shadow/forward OOS | 阻塞官方 S1 主证据和 holdout 最终验收 |
 | P0 execution audit | 可执行收益审计 | `execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和 T+1/分批执行规则生成 open/proxy、3/5 日分批、未成交 carryover、解锁反转和订单状态；先标记为日频 L1 代理 | 阻塞 factor keep、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
-| P1 total-return | 公司行为主表 | 官方或授权 `corporate_actions` 主表、total-return audit | 统一 `asset_id`、公告日、登记日、除权除息日、现金分红、送转配字段；与 R7 sanity reference 和 adjusted-vs-raw event-like 样本交叉校验 | 阻塞完整 total-return accounting 和基本面增强叙事 |
+| P1 total-return | 公司行为主表 | 官方或授权 `corporate_actions` 主表、total-return audit | 统一 `asset_id`、公告日、登记日、除权除息日、现金分红、送转配字段；与当前 sanity reference 和 adjusted-vs-raw event-like 样本交叉校验 | 阻塞完整 total-return accounting 和基本面增强叙事 |
 | P1 execution data | 执行增强数据 | `limit_events`、`prices_minute`、集合竞价/开盘成交明细 | 先 source registration 和样本日 smoke test；区分盘中可见字段和盘后统计字段；生成 timezone、PIT、coverage、重复键、成交失败审计 | 阻塞日频 alpha sleeve、精细开盘冲击和三段成交模型 |
 | P1/P1.5 flows | 资金流/衍生品/宽度 | 融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI | 逐源登记 vendor/license/披露时点；统一 A 股交易日历和代码映射；做 coverage、异常值、PIT 和 leakage audit | 不阻塞 market-only S1-M，但阻塞可部署风控增强 |
 | P1.5 GMSL | 外生冲击完整面板 | FX、rates、spot/futures energy、global equity futures、MOVE、commodity basket、地缘事件日历 | 保留 Cboe 局部成功；为 FRED 超时源准备替代 vendor/mirror；全部转 UTC 后按 A 股 T 日 16:00 session cutoff 顺延；阈值只用训练窗计算 | GMSL 继续只能 partial stress report，不能进入 alpha、选模或调阈值 |
@@ -114,12 +114,12 @@ R11 响应矩阵：
 | `tradability_daily/` | 年度分区逐日可交易性 | 观测 bar、推断停牌/无成交、bar 质量不可交易标记 |
 | `suspension_events/` | 推断停牌/无成交事件 + AkShare 停复牌提醒 | 缺失 bar 推断事件、2023 年以来 A 股停复牌提醒 |
 | `valuation_daily/` | 年度分区每日指标 | PE/PB/市值/股本/换手率等日频指标，T 日盘后可见 |
-| `features/market_daily_v1` | R7 market-only 日频特征面板 | 市值/流动性/动量/反转/波动率/ADV/tradability/universe/PIT 行业等 S1 准备特征 |
-| `labels/forward_returns_v1` | R7 forward return 标签面板 | 1/5/10/20 日 forward adjusted return、全 A 等权代理超额、rank/top decile 标签 |
+| `features/market_daily_v1` | market-only 日频特征面板 | 市值/流动性/动量/反转/波动率/ADV/tradability/universe/PIT 行业等 S1 准备特征 |
+| `labels/forward_returns_v1` | forward return 标签面板 | 1/5/10/20 日 forward adjusted return、全 A 等权代理超额、rank/top decile 标签 |
 | `global_macro_daily` | GMSL 外生宏观候选表 | Cboe VIX/OVX/GVZ 已形成 17,526 行 candidate 数据；FRED Brent/WTI、DXY、UST、全球股指等仍抓取失败或待接入，只作 candidate/stress report 框架 |
 | `gmsl_shock_state` | GMSL shock-state 候选表 | 基于当前 Cboe 候选源形成 9,176 行 partial shock-state；非 keep gate，不得用于 alpha 选模或调阈值 |
 | `geopolitical_event_calendar` | 地缘事件窗口候选空表 | 俄乌、中东、美伊、红海、制裁等预注册事件窗口；当前 0 行，只作 stress reporting |
-| `corporate_actions/` | R7 公司行为 sanity reference | AkShare/Sina 历史分红摘要和 Eastmoney 2023 年报分红送配样本，只作复权 sanity，不是完整主表 |
+| `corporate_actions/` | 公司行为 sanity reference | AkShare/Sina 历史分红摘要和 Eastmoney 2023 年报分红送配样本，只作复权 sanity，不是完整主表 |
 | `benchmarks/` | 内部代理 + 官方指数 benchmark | 全 A 等权、总市值加权代理、沪深300/中证500/中证1000 |
 | `reference_rates/` | 无风险利率 | 固定 fallback + 中国国债收益率 + Shibor 实际序列 |
 | `processed_inventory/` | 旧 processed 产物盘点 | 判断旧清洗结果能否复用 |
@@ -183,7 +183,7 @@ R11 响应矩阵：
 - 覆盖证券：3,455 只。
 - 覆盖推断缺失交易日：577,900。
 
-第四轮优化后，该表补充了事件级诊断字段：
+该表包含事件级诊断字段：
 
 - `event_length_bucket`：按 1 日、2-5 日、6-20 日、21-60 日、61-250 日、250 日以上分桶。
 - `event_type_inferred`：按长度粗分单日缺失、短区间、中区间、长期暂停/源缺口候选。
@@ -223,7 +223,7 @@ R11 响应矩阵：
 - 可用于当前截面诊断、数据覆盖检查，或作为后续接入 PIT 行业源前的显式占位。
 - 若要做历史行业中性化，应先接入带 `effective_from/effective_to/available_at` 的 PIT 行业分类源。
 
-第五轮后新增 AkShare/巨潮 PIT 行业事件：
+AkShare/巨潮 PIT 行业事件：
 
 - `industry_change_events_akshare`：53,925 行，逐证券行业归属变动事件。
 - `pit_industry_intervals_akshare`：53,925 行，按 `classification_standard_code` 生成的行业有效区间。

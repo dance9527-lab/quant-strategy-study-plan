@@ -22,9 +22,9 @@
 - `processed_inventory/`：旧 `processed` 产物盘点，用于判断可复用性。
 - `schemas/`：字段登记和质量规则。
 - `configs/retention_policy.yaml`：派生产物、缓存、临时解压和告警归档策略；原始数据不删除。
-- `features/market_daily_v1`、`labels/forward_returns_v1`：R7 已生成 market-only 日频特征和 forward return 标签面板，各 15,420,654 行，正式 S1 训练前仍需 walk-forward calendar、holdout log、execution label audit 和实验登记。
-- `corporate_actions/`：R7 AkShare/Sina/Eastmoney 公司行为 sanity reference，不是完整官方公司行为主表。
-- `global_macro_daily/`、`gmsl_shock_state/`、`geopolitical_event_calendar/`：R11 已初始化 GMSL candidate 表和 STATUS；2026-04-30 实际抓取中，FRED `fredgraph.csv` 配置源全部超时，Cboe 官方 VIX/OVX/GVZ CSV 成功形成 17,526 行 `global_macro_daily` 和 9,176 行 partial `gmsl_shock_state`。这些数据仍只作 source registry、stress report 和时区/session cutoff 审计框架，不能作为 alpha 输入。
+- `features/market_daily_v1`、`labels/forward_returns_v1`：market-only 日频特征和 forward return 标签面板，各 15,420,654 行，正式 S1 训练前仍需 walk-forward calendar、holdout log、execution label audit 和实验登记。
+- `corporate_actions/`：AkShare/Sina/Eastmoney 公司行为 sanity reference，不是完整官方公司行为主表。
+- `global_macro_daily/`、`gmsl_shock_state/`、`geopolitical_event_calendar/`：GMSL candidate 表和 STATUS 已初始化；FRED `fredgraph.csv` 配置源全部超时，Cboe 官方 VIX/OVX/GVZ CSV 成功形成 17,526 行 `global_macro_daily` 和 9,176 行 partial `gmsl_shock_state`。这些数据仍只作 source registry、stress report 和时区/session cutoff 审计框架，不能作为 alpha 输入。
 
 ## 使用建议
 
@@ -37,7 +37,7 @@
 7. `valuation_daily` 中的估值和股本字段默认 T 日盘后可见，不能用于 T 日开盘前决策。
 8. `valuation_daily` 中市值、股本、换手率可先作为市场可得慢变量；PE/PB/PS/TTM 等财报派生字段仍需公告日和供应商计算时点 PIT 审计。
 9. 因子研究和执行回测必须拆分 `research_observable_universe`、`entry_eligible_universe` 和 `execution_accounting_universe`；当前 `universe_daily.in_factor_research_universe` 是保守 close-based 因子 universe，不能覆盖全部风险样本研究。
-10. `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 和 `security_master.equity_master` 已在 R7 补齐表级或字段级 source/time/status 字段；后续重建后必须复跑 `source_status_audit_r7.json` 或等价审计。
+10. `prices_daily_unadjusted`、`prices_daily_returns`、`valuation_daily` 和 `security_master.equity_master` 已补齐表级或字段级 source/time/status 字段；后续重建后必须复跑 `source_status_audit_r7.json` 或等价审计。
 
 source registry 命名边界：
 
@@ -45,41 +45,41 @@ source registry 命名边界：
 - warehouse 核心表中的 `source_status` 是表内字段级 source/time/status 审计结果，不等同于 source registry 的 `status` 列。
 - 已有候选行或 `available_now` 的 source 在升格前必须补齐 vendor/license、warehouse table、timezone/session cutoff、quality report、schema hash 或 schema registry hash；planned-only 和 blocked source 可暂留空，但必须写清 `known_gaps` 和 `usage_allowed_stage`。
 
-R11 response boundary:
+当前执行边界:
 
 - P1 market-only 因子库已经足以进入 S1-M/S1-D/S1-R 研究准备，但正式 S1 evidence 仍阻塞于 `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账、factor library registry、benchmark/universe audit、execution label audit 和 orders/capacity audit。
 - GMSL 当前只完成 Cboe VIX/OVX/GVZ partial candidate；FRED 能源、汇率、利率和全球股指仍超时或待接入。GMSL 只能 `stress_report_only`，不能进入 alpha feature selection、model selection、threshold tuning 或任何放宽风险的规则。
 - `is_delisted` 和历史证券补全只能证明退市样本存在；退市日期、退市前收益处理、当前列表外历史证券保留和三层 universe 仍需 `survivorship_bias_audit` / `universe_daily_construction_audit`。
 - ROE、毛利率、盈利稳定性等基本面质量因子只作为 P2 explainability 候选；公告日、报告期、重述版本和供应商计算时点 PIT 审计前不得进入 keep。
 
-## 2026-04-29 P1 优化补充
+## 当前核心产物补充
 
-- 新增 `D:\data\scripts\warehouse\build_valuation_daily.py`，用 6 worker 按年份并行构建每日指标。
+- 构建脚本：`D:\data\scripts\warehouse\build_valuation_daily.py`，用 6 worker 按年份并行构建每日指标。
 - `valuation_daily` 已生成 27 个年度分区、16,642,794 行，覆盖 2000-01-04 至 2026-04-27。
-- 新增 `D:\data\scripts\warehouse\enhance_warehouse_metadata.py`，补齐证券状态推断、复权因子滞后影响报告、目录状态、质量告警和轻量增量计划。
+- 元数据脚本：`D:\data\scripts\warehouse\enhance_warehouse_metadata.py`，补齐证券状态推断、复权因子滞后影响报告、目录状态、质量告警和轻量增量计划。
 - `security_master/equity_master` 已增加 `is_delisted`、`listing_status_inferred`、`last_bar_staleness_days`；这些字段是工程推断，不是交易所官方退市公告。
 - `calendar/stamp_tax_history.csv` 和 `calendar/cost_model.csv` 已补充历史印花税与佣金研究假设；佣金不是统一税率，回测前可按实际账户覆盖。
 - `leakage_check.py` 已支持多进程分区检查，并纳入 `valuation_daily`。
 
-## 2026-04-29 三方审议第二轮优化
+## Benchmark、reference rate 和成本当前状态
 
-- 新增 `D:\data\scripts\warehouse\apply_review_consensus_improvements.py`，以年度分区为单位并行处理，默认 6 worker，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
+- 构建脚本：`D:\data\scripts\warehouse\apply_review_consensus_improvements.py`，以年度分区为单位并行处理，默认 6 worker，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
 - `benchmarks/benchmark_returns.parquet` 已生成 14,976 行，包含：
   - `CN_A_ALL_EQW_PROXY`：全 A 可得收益等权代理。
   - `CN_A_ALL_MV_WEIGHTED_PROXY`：2000 年以来全 A 上一交易日总市值加权代理。
-- 第二轮审议指出旧 `CN_A_ALL_AMOUNT_WEIGHTED_PROXY` 使用同日成交额加权，会产生非可投资的爆炸指数；该默认基准已移除，详见 `audit_reports/benchmark_sanity_report.md`。
+- 旧 `CN_A_ALL_AMOUNT_WEIGHTED_PROXY` 使用同日成交额加权，属于非可投资代理；该默认基准已移除，详见 `audit_reports/benchmark_sanity_report.md`。
 - `reference_rates/reference_rates.parquet` 已生成 8,629 行，覆盖 1990-12-19 至 2026-04-27，固定年化 1.5% 研究假设。
 - `calendar/trading_rules.csv` 已结构化补充科创板、创业板注册制后、北交所上市前 5 个交易日不设涨跌幅限制。
 - `calendar/cost_model.csv` 已将 `transfer_fee` 从 0 升级为 0.001% 双向研究假设。
-- `audit_reports/valuation_return_key_diff_summary.csv` 显示 2000-2026 全量对齐下，估值表 extra 5,562 个 key，missing 146,208 个 key；报告原文的 241 行差异只对应局部年份，不适合作为全量结论。
+- `audit_reports/valuation_return_key_diff_summary.csv` 显示 2000-2026 全量对齐下，估值表 extra 5,562 个 key，missing 146,208 个 key；局部年份差异不适合作为全量结论。
 - `audit_reports/suspension_volume_coverage_summary.csv` 显示当前日 K 没有显式 `volume == 0` 停牌 bar；构建脚本没有过滤零成交行，因此缺失停牌 bar 更可能来自源数据表示。
 - `audit_reports/suspension_missing_bar_summary.csv` 已按交易日历和证券首末 bar 统计潜在停牌/无成交/源数据缺口：缺失 bar 577,897 行，不合成写入价格主表。
 - `schemas/schema_registry.csv` 已补全核心表字段登记：`valuation_daily` 27 列、`calendar.trading_rules` 12 列、`benchmarks.benchmark_returns` 16 列。
 - `leakage_check.py` 已纳入 `benchmarks` 和 `reference_rates`，并检查 `benchmark_id/trade_date`、`rate_id/trade_date` 重复键。
 
-## 2026-04-29 三方审议第三轮优化
+## Tradability 当前状态
 
-- 新增 `D:\data\scripts\warehouse\build_tradability_daily.py`，按年度分区多进程构建逐日可交易性伴生表，默认 6 worker，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
+- 构建脚本：`D:\data\scripts\warehouse\build_tradability_daily.py`，按年度分区多进程构建逐日可交易性伴生表，默认 6 worker，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
 - `tradability_daily` 已生成 37 个年度分区、18,177,689 行：
   - `bar_present_rows=17,599,789`，与未复权价格主表一致。
   - `is_suspended_inferred=True` 577,900 行。
@@ -90,19 +90,19 @@ R11 response boundary:
 - `leakage_check.py` 已纳入 `tradability_daily` 的时点与重复键检查。
 - 所有停牌标记均为工程推断，不等同交易所官方停牌公告；后续仍应接入官方停牌/复牌事件源做校验。
 
-## 2026-04-29 三方审议第四轮优化
+## 行业和停牌当前状态
 
-- 新增 `D:\data\scripts\warehouse\apply_round4_consensus_improvements.py`，用 6 worker 并行验证 `tradability_daily` 分区，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
-- 新增 `industry_classification/current_industry_snapshot.*`：5,834 行，行业非空 5,488 行，缺失 346 行；该表是当前快照、非 PIT 历史行业分类。
+- 构建脚本：`D:\data\scripts\warehouse\apply_round4_consensus_improvements.py`，用 6 worker 并行验证 `tradability_daily` 分区，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
+- `industry_classification/current_industry_snapshot.*`：5,834 行，行业非空 5,488 行，缺失 346 行；该表是当前快照、非 PIT 历史行业分类。
 - 增强 `suspension_events/inferred_suspension_events.*`：事件表增至 16 列，补充 `event_length_bucket`、`event_type_inferred`、`tradability_constraint_confidence`、`official_suspension_validation_status` 等字段。
-- 新增 `audit_reports/suspension_inference_validation_report.md`：37 个 `tradability_daily` 分区、18,177,689 行、577,900 个推断停牌行验证通过；`is_suspended_inferred=True` 且 `bar_present=True` 为 0，且 `is_tradable=True` 为 0。
-- 新增 `audit_reports/round4_source_gap_report.md`：本地未发现可靠官方指数价格、真实 reference rate 或官方停牌/复牌公告源；行业源仅为当前快照。
+- `audit_reports/suspension_inference_validation_report.md`：37 个 `tradability_daily` 分区、18,177,689 行、577,900 个推断停牌行验证通过；`is_suspended_inferred=True` 且 `bar_present=True` 为 0，且 `is_tradable=True` 为 0。
+- `audit_reports/round4_source_gap_report.md`：本地未发现可靠官方指数价格、真实 reference rate 或官方停牌/复牌公告源；行业源仅为当前快照。
 - `schemas/schema_registry.csv` 已增至 201 行，新增 `industry_classification.current_industry_snapshot` 18 列，并将增强后的 `suspension_events.inferred_suspension_events` 更新为 16 列。
 - `leakage_check.py` 已纳入 `suspension_events` 和 `industry_classification` 的时点与重复键检查。
 
-## 2026-04-29 三方审议第五轮 AkShare 接入
+## AkShare 外部源当前状态
 
-- 新增 `D:\data\scripts\warehouse\apply_round5_akshare_sources.py`，用 6 worker 接入 AkShare 外部源，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
+- 构建脚本：`D:\data\scripts\warehouse\apply_round5_akshare_sources.py`，用 6 worker 接入 AkShare 外部源，并限制 BLAS/Arrow 内部线程避免过度抢占 CPU。
 - AkShare 已在本地 `ptorch` 环境安装，版本 1.18.57；目标接口存在，无需额外安装。
 - `benchmarks/benchmark_returns.parquet` 已追加官方中证指数：
   - `CSI_000300_OFFICIAL_AKSHARE`、`CSI_000905_OFFICIAL_AKSHARE`、`CSI_000852_OFFICIAL_AKSHARE`。
@@ -120,9 +120,9 @@ R11 response boundary:
   - 历史深度有限，不能替代完整交易所公告库。
 - `schemas/schema_registry.csv` 已增至 259 行。
 - `leakage_check.py --workers 6` 八类目录全部 PASS；其中 `benchmarks` 31,229 行、`reference_rates` 32,921 行、`suspension_events` 77,077 行、`industry_classification` 113,684 行。
-- `rate_interbank` Shibor 接口在当前环境中文参数触发 KeyError；本轮采用国债收益率替代固定 reference rate，Shibor 后续单独修复。
+- `rate_interbank` Shibor 接口在当前环境中文参数触发 KeyError；正式引用以当前入仓的国债收益率、Shibor 序列和最新 reference rate 审计为准。
 
-上述 Shibor 状态已被后续 P1 data preconditions update 取代：`reference_rates` 当前为 55,964 行，含 9 条 Shibor 序列和国债收益率序列。正式引用时以 `audit_reports/p1_data_preconditions_build_summary.json`、`audit_reports/p1_data_preconditions_validation.json` 和最新 `leakage_check_report.json` 为准。
+`reference_rates` 当前为 55,964 行，含 9 条 Shibor 序列和国债收益率序列。正式引用时以 `audit_reports/p1_data_preconditions_build_summary.json`、`audit_reports/p1_data_preconditions_validation.json` 和最新 `leakage_check_report.json` 为准。
 
 ## 构建摘要
 
@@ -224,11 +224,11 @@ R11 response boundary:
 }
 ```
 
-## P1 data preconditions update (2026-04-29)
+## P1 data preconditions current state
 
-新增脚本：`D:\data\scripts\warehouse\apply_p1_data_preconditions.py`。
+构建脚本：`D:\data\scripts\warehouse\apply_p1_data_preconditions.py`。
 
-新增/增强产物：
+当前产物：
 
 - `reference_rates/reference_rates.parquet`：总行数 55,964，新增 Shibor 9 条序列、23,043 行。隔夜 Eastmoney/AkShare 序列覆盖 2006-10-08 至 2026-04-27；金十/AkShare 多期限 Shibor 覆盖 2015-05-08 至 2026-04-27。
 - `risk_warning_events/`：深交所简称变更事件和当前风险警示快照，共 13,142 行。深市带日期 ST/摘帽摘星事件可作 PIT 输入；沪/北历史 ST 仍缺官方带日期源。
@@ -247,19 +247,19 @@ R11 response boundary:
 剩余缺口和状态分层：
 
 - 单一事实源：当前 `warehouse_build_manifest.json` 已在策略 Git 项目中建立为依据文档镜像；仓库侧如果重建，应由构建脚本生成同名 manifest，并用它派生 STATUS 和目录状态，避免手工状态文件漂移。
-- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、R7 feature/label panel 和核心 source status 字段可用于 market-only S1 研究准备；仍需引用 manifest/hash 并完成 walk-forward/holdout、execution label audit 和实验登记。
+- `available_now`：日 K、PIT adjusted return、tradability/universe、benchmark、reference rates、PIT 行业、估值里的市值/换手等市场慢变量、feature/label panel 和核心 source status 字段可用于 market-only S1 研究准备；仍需引用 manifest/hash 并完成 walk-forward/holdout、execution label audit 和实验登记。
 - `missing`：`walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账、execution label audit 和完整官方/授权公司行为主表仍未生成。
 - `blocked_by_source_gap`：沪/北历史 ST、摘帽/摘星、完整交易所官方停复牌历史、历史 PIT 指数成分/权重、独立公司行为/除权除息/分红送配主表仍缺官方、授权或可靠历史源。
 - `candidate_etl`：融资融券、北向资金、限售解禁、ETF flow、股指期货 basis/OI、市场宽度、分钟/集合竞价、财报披露、GMSL 外生冲击源、股东户数、质押、龙虎榜、大宗交易和新闻公告只登记为候选源；未入仓、未 PIT/timezone/session cutoff/coverage 审计前不得进入官方 S1 keep。
-- 手工状态文件：`reference_rates/STATUS.md`、`benchmarks/STATUS.md` 和 `audit_reports/warehouse_directory_status.csv` 可能滞后于 P1 更新；正式实验引用 Git 侧 manifest、leakage check 和 P1 validation，不以这些手工状态文件为单一事实源。
+- 手工状态文件：`reference_rates/STATUS.md`、`benchmarks/STATUS.md` 和 `audit_reports/warehouse_directory_status.csv` 可能滞后于 manifest；正式实验引用 Git 侧 manifest、leakage check 和 P1 validation，不以这些手工状态文件为单一事实源。
 - 交易所级日历当前为统一 A 股日历代理，不是三所各自官方历史日历。
 - `return_adjusted_pit` 可作为 adjusted-return proxy；在公司行为主表和 total-return audit 未完成前，不能宣称完整 total-return accounting 闭环。
 
-## R7 feature-label panel and source status update (2026-04-30)
+## Feature-label panel and source status current state
 
-新增脚本：`D:\data\scripts\warehouse\apply_r7_feature_label_panel.py`。
+构建脚本：`D:\data\scripts\warehouse\apply_r7_feature_label_panel.py`。
 
-新增/增强产物：
+当前产物：
 
 - `features/market_daily_v1/`：22 个年度分区，15,420,654 行，覆盖 2005-2026；包含 market-only 日频特征、trailing return/volatility/ADV、估值市场慢变量 mask/ffill、tradability/universe、benchmark 和 PIT 申万行业字段。
 - `labels/forward_returns_v1/`：22 个年度分区，15,420,654 行；包含 1/5/10/20 日 forward adjusted return、全 A 等权代理超额、rank 和 top-decile 标签。
@@ -270,23 +270,23 @@ R11 response boundary:
 - `schemas/valuation_field_pit_tier_registry.csv`：把 `valuation_daily` 字段拆分为 market-derived PIT candidate 和 financial-statement-dependent unverified PIT。
 - `corporate_actions/`：AkShare/Sina 历史分红摘要 5,675 行和 Eastmoney 2023 年报分红送配样本 3,859 行。
 - `audit_reports/corporate_action_adjustment_sanity_report.json`：adjusted-vs-raw sanity check；1990-2026 共 106,923 行 adjustment event-like 样本。该审计不等于完整 total-return accounting。
-- 根目录 `warehouse_build_manifest.json`：现在由 R7 脚本生成，并已同步到策略 Git 项目。
+- 根目录 `warehouse_build_manifest.json`：由构建脚本生成，并同步到策略 Git 项目。
 
 验证：
 
 - `leakage_check.py --workers 6` 已扩展到 17 类目录，全部 PASS；新增覆盖 `features`、`labels` 和 `corporate_actions`。
 - `features/market_daily_v1` 与 `labels/forward_returns_v1` 行数一致。
 
-## R11 GMSL candidate source initialization (2026-04-30)
+## GMSL candidate source current state
 
-新增脚本：`D:\data\scripts\warehouse\apply_gmsl_candidate_sources.py`。
+构建脚本：`D:\data\scripts\warehouse\apply_gmsl_candidate_sources.py`。
 
-新增/增强产物：
+当前产物：
 
 - `global_macro_daily/global_macro_daily.parquet`：GMSL 外生宏观候选表，当前 17,526 行，覆盖 Cboe VIX、OVX、GVZ 三个已成功抓取的公开 CSV 源。
 - `gmsl_shock_state/gmsl_shock_state.parquet`：oil/fx/global risk-off/rate/commodity shock 候选状态表，当前 9,176 行；由于能源价格、FX、利率和全球股指源仍未成功入仓，shock state 只是 partial report-only 产物。
 - `geopolitical_event_calendar/geopolitical_event_calendar.parquet`：预注册地缘事件窗口候选表，当前 0 行。
-- `audit_reports/gmsl_source_fetch_status.csv`：公开源抓取状态；2026-04-30 对 FRED `fredgraph.csv` 配置源执行实际抓取，所有 configured FRED series 均 `ReadTimeout`；同轮 Cboe VIX/OVX/GVZ 官方 CSV 抓取成功。
+- `audit_reports/gmsl_source_fetch_status.csv`：公开源抓取状态；FRED `fredgraph.csv` 配置源执行实际抓取时所有 configured FRED series 均 `ReadTimeout`；Cboe VIX/OVX/GVZ 官方 CSV 抓取成功。
 - `audit_reports/gmsl_coverage_report.csv`：当前 Cboe 候选源覆盖报告，VIX 1990-01-02 至 2026-04-29，OVX/GVZ 2009-09-18 至 2026-04-29。
 - `audit_reports/gmsl_timezone_available_at_audit.json`：时区和 `available_at <= decision_time` 候选审计，当前 PASS。
 - `audit_reports/gmsl_manifest.json`：候选 GMSL 表 hash、行数和禁止用途。
@@ -306,15 +306,15 @@ R11 response boundary:
 - 官方 S1 训练仍需先固化 `walk_forward_calendar_v1`、`holdout_access_log.tsv`、测试族台账和实验登记。
 - 完整官方或授权公司行为主表仍缺；当前只允许声明 adjusted-return proxy 和 sanity check。
 
-## R12 data supplement plan (2026-04-30, not executed)
+## Data supplement plan
 
-R12 只更新规划和文档，不执行新增外部抓取、清洗或入仓。当前 warehouse 可支持 market-only S1-M/S1-D 研究准备，但不支持直接产出官方 S1 keep 或可部署结论。
+当前 warehouse 可支持 market-only S1-M/S1-D 研究准备，但不支持直接产出官方 S1 keep 或可部署结论。未获明确执行指令前，不新增外部抓取、清洗或入仓。
 
 优先补充：
 
-1. P0 governance：生成 `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry 和 `experiment_ledger`，所有产物写入 hash，并绑定 `warehouse_build_manifest.json`、source registry 和 `validation_params.json`。R11 后 `holdout_access_log.tsv` 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；holdout 一旦被用于策略选择即 burned，生产前需新增不少于 252 个交易日 shadow/forward OOS。
+1. P0 governance：生成 `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry 和 `experiment_ledger`，所有产物写入 hash，并绑定 `warehouse_build_manifest.json`、source registry 和 `validation_params.json`。`holdout_access_log.tsv` 最小字段为 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag、followup_action；holdout 一旦被用于策略选择即 burned，生产前需新增不少于 252 个交易日 shadow/forward OOS。
 2. P0/P1 executable PnL audit：生成 `execution_label_audit`、`execution_audit/orders_audit` 和 `daily_turnover_capacity_report`；先使用日频 open/amount/tradability 的 L1 代理，字段使用 `offline_sim_target_weight`，禁止把 `target_weight` 接入生产订单接口。
-3. P1 total-return：补官方或授权公司行为主表，统一公告日、登记日、除权除息日、现金分红、送转配字段，并与 R7 sanity reference 和 adjusted-vs-raw 样本交叉校验。
+3. P1 total-return：补官方或授权公司行为主表，统一公告日、登记日、除权除息日、现金分红、送转配字段，并与当前 sanity reference 和 adjusted-vs-raw 样本交叉校验。
 4. P1 execution data：补 `limit_events`、`prices_minute` 和集合竞价/开盘成交明细；清洗时必须区分盘中可见字段与盘后统计字段，并输出 PIT、coverage、timezone/session cutoff 和成交失败审计。
 5. P1/P1.5 flows and GMSL：融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI 和 GMSL 替代源均先做 candidate ETL；Cboe VIX/OVX/GVZ 继续保持 stress report-only，FRED 超时源需 vendor mirror 或替代下载策略。
 6. Schema registry hygiene：补登记 `corporate_actions`、治理产物、`limit_events`、`prices_minute/auction` 的 schema；清理 GMSL schema 描述中的乱码或不可读字段说明，并把 schema hash 写回 manifest/source registry。

@@ -1,6 +1,6 @@
 {
-  "manifest_version": "2026-04-30-r11-gmsl-risk-execution",
-  "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_r7_20260430_094835_plus_r11_gmsl_partial_cboe_20260430_221532",
+  "manifest_version": "2026-05-01-execution-governance",
+  "build_id": "warehouse_build_20260429_021444_plus_p1_preconditions_plus_feature_label_20260430_094835_plus_gmsl_partial_cboe_20260430_221532",
   "purpose": "warehouse_generated_data_fact_manifest",
   "canonical_warehouse": "D:\\data\\warehouse",
   "generated_for_repo": "D:\\quantum_a0\\quant-strategy-study-plan",
@@ -111,11 +111,11 @@
     "availability_bucket_policy": "external_data_sources.csv availability_bucket remains canonical for strategy planning",
     "features": "market_daily_v1 built",
     "labels": "forward_returns_v1 built",
-    "core_table_source_status": "r7_required_columns_present",
+    "core_table_source_status": "required_columns_present",
     "corporate_actions": "akshare sanity reference plus adjusted-vs-raw sanity only; full official main table still source gap",
     "candidate_etl_sources": "registered only unless separately ingested and audited",
     "blocked_by_source_gap_sources": "sh_bj_historical_st, full_official_suspension_archive, historical_pit_index_membership, official_or_authorized_full_corporate_actions",
-    "gmsl": "candidate_etl partial Cboe VIX/OVX/GVZ rows ingested; 2026-04-30 FRED fredgraph.csv configured series timed out; stress_report_only until full timezone/session cutoff/PIT/coverage audit passes"
+    "gmsl": "candidate_etl partial Cboe VIX/OVX/GVZ rows ingested; FRED fredgraph.csv configured series timed out; stress_report_only until full timezone/session cutoff/PIT/coverage audit passes"
   },
   "validation_status": {
     "feature_panel_built": true,
