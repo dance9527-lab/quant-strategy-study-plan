@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-01-capital-overlay-segmented-sleeves",
+  "version": "2026-05-01-final-review-v2-execution-hardening",
   "scope": "official_strategy_evidence",
   "parameter_basis": [
     "quant_strategy_plan.md",
@@ -495,7 +495,7 @@
     "holdout_window",
     "parameter_perturbation",
     "annual_and_market_regime_stability",
-    "false_discovery_rate_if_factor_count_gt_20",
+    "false_discovery_rate_for_full_test_family_attempts",
     "test_family_ledger",
     "holdout_access_log"
   ],
@@ -539,6 +539,8 @@
       "factor",
       "label",
       "model",
+      "sleeve",
+      "sleeve_cross_comparison",
       "half_life",
       "training_window",
       "orthogonalization_branch",
@@ -594,6 +596,48 @@
       "gmsl_threshold_or_industry_rule_tuning_from_holdout_forbidden": true
     },
     "execution_label_audit_required": true
+  },
+  "mde_power_analysis": {
+    "required_in_reports": true,
+    "role": "interpret_smoke_test_power_not_hard_gate_override",
+    "ic_sigma_assumption": 0.06,
+    "alpha_one_sided": 0.1,
+    "smoke_oot_steps": 24,
+    "full_oot_steps_reference": 180,
+    "hard_gate_override_forbidden": true,
+    "insufficient_power_status": "inconclusive - insufficient power",
+    "reference_table": [
+      {
+        "annual_sharpe": 0.3,
+        "ic_mean": 0.0052,
+        "power_24_steps": 0.085,
+        "power_180_steps": 0.28
+      },
+      {
+        "annual_sharpe": 0.5,
+        "ic_mean": 0.0087,
+        "power_24_steps": 0.174,
+        "power_180_steps": 0.58
+      },
+      {
+        "annual_sharpe": 0.8,
+        "ic_mean": 0.0139,
+        "power_24_steps": 0.326,
+        "power_180_steps": 0.87
+      },
+      {
+        "annual_sharpe": 1.0,
+        "ic_mean": 0.0173,
+        "power_24_steps": 0.433,
+        "power_180_steps": 0.95
+      },
+      {
+        "annual_sharpe": 1.5,
+        "ic_mean": 0.026,
+        "power_24_steps": 0.688,
+        "power_180_steps": 0.997
+      }
+    ]
   },
   "economic_reference_thresholds": {
     "role": "soft_economic_reference_not_replacement_for_hac_bootstrap_holdout_cost_capacity_gates",
@@ -759,6 +803,15 @@
       "target_notional_formula": "initial_capital * capital_multiplier(market_state)",
       "cash_treatment": "uninvested_capital_stays_cash_no_leverage_no_return_boost",
       "full_investment_control_required": true,
+      "execution_order": [
+        "model_generates_full_investment_target_weights_sum_1",
+        "apply_turnover_industry_asset_layered_clipping",
+        "renormalize_clipped_weights_to_1",
+        "assert_abs_sum_w_clipped_minus_1_lt_1e_minus_6",
+        "multiply_by_capital_multiplier",
+        "cash_equals_1_minus_sum_final_weights"
+      ],
+      "overlay_before_turnover_clipping_forbidden": true,
       "conservative_mapping": {
         "bull": [
           0.8,
@@ -1009,6 +1062,11 @@
       "microcap_default_keep_allowed": false,
       "thresholds_must_be_preregistered": true,
       "counts_toward_attempt_count": true,
+      "shared_test_family_id_required": true,
+      "bh_fdr_over_full_family_required": true,
+      "report_sleeve_count_and_bh_adjusted_threshold": true,
+      "storey_q_diagnostic_allowed_only_if_preregistered": true,
+      "sleeve_cross_comparisons_count_as_independent_hypotheses": true,
       "oot_or_holdout_selection_forbidden": true,
       "same_cost_capacity_and_calendar_required": true
     },
@@ -1151,7 +1209,23 @@
       "requires_validated_risk_response_before_position_change": true,
       "false_positive_rate_method": "signal_event_hit_rate_on_walk_forward_oot_fixed_forward_window",
       "false_positive_rate_formula": "1 - hit_rate",
-      "false_positive_baseline": "timestamp_shuffle_permutation_test",
+      "hit_window_oot_steps_default": 3,
+      "hit_window_sensitivity_oot_steps": [
+        2,
+        3,
+        5
+      ],
+      "primary_hit_criterion": "at_least_2_of_next_3_oot_steps_cost_after_portfolio_return_below_benchmark",
+      "auxiliary_hit_criterion": "at_least_2_of_next_3_oot_steps_matured_ic_below_0",
+      "false_positive_baseline": "block_permutation_test",
+      "block_permutation_block_days": 21,
+      "block_permutation_min_samples": 1000,
+      "min_signals_for_point_estimate": 5,
+      "min_signals_for_tighten_only_use": 20,
+      "ic_lag1_autocorrelation_required": true,
+      "ic_lag1_autocorrelation_symbol": "rho",
+      "autocorrelation_bootstrap_trigger_rho_gt": 0.3,
+      "power_below_50pct_status": "inconclusive - insufficient power",
       "false_positive_no_statistical_power_if_permutation_p_gt": 0.05,
       "same_step_oot_or_holdout_feedback_forbidden": true,
       "human_override_forbidden": true,
@@ -1354,6 +1428,66 @@
     "storage_backend": "sqlite_wal",
     "canonical_artifact": "experiment_ledger.sqlite",
     "sqlite_wal_required": true,
+    "sqlite_pragmas": [
+      "PRAGMA journal_mode=WAL",
+      "PRAGMA synchronous=NORMAL"
+    ],
+    "minimum_tables": [
+      "experiment_runs",
+      "model_registry"
+    ],
+    "experiment_runs_minimum_columns": [
+      "run_id TEXT PRIMARY KEY",
+      "test_family_id TEXT NOT NULL",
+      "track_id TEXT NOT NULL",
+      "sleeve_id TEXT",
+      "factor_id TEXT",
+      "label_id TEXT NOT NULL",
+      "model_id TEXT",
+      "calendar_id TEXT",
+      "panel_hash TEXT",
+      "execution_rule_id TEXT",
+      "trial_index_in_family INTEGER NOT NULL",
+      "total_trials_in_family INTEGER NOT NULL",
+      "attempt_count INTEGER NOT NULL",
+      "fdr_method TEXT",
+      "ic_mean REAL",
+      "ic_pvalue REAL",
+      "bh_adjusted_pvalue REAL",
+      "storey_q_value REAL",
+      "bootstrap_p REAL",
+      "keep_decision TEXT NOT NULL",
+      "created_at TEXT NOT NULL",
+      "validation_params_hash TEXT NOT NULL",
+      "artifact_hash TEXT"
+    ],
+    "model_registry_minimum_columns": [
+      "model_id TEXT PRIMARY KEY",
+      "model_version TEXT NOT NULL",
+      "track_id TEXT NOT NULL",
+      "model_family TEXT NOT NULL",
+      "refit_date TEXT NOT NULL",
+      "train_start_date TEXT NOT NULL",
+      "train_end_date TEXT NOT NULL",
+      "rebalance_start_date TEXT",
+      "rebalance_end_date TEXT",
+      "artifact_path TEXT NOT NULL",
+      "artifact_hash TEXT NOT NULL",
+      "validation_params_hash TEXT NOT NULL",
+      "code_commit TEXT NOT NULL",
+      "random_seed INTEGER",
+      "created_at TEXT NOT NULL",
+      "replaced_by_model_id TEXT",
+      "replacement_reason TEXT"
+    ],
+    "minimum_indexes": [
+      "experiment_runs(test_family_id, trial_index_in_family)",
+      "experiment_runs(track_id, label_id)",
+      "experiment_runs(sleeve_id)"
+    ],
+    "model_artifact_root": "model_artifacts/frozen_models",
+    "model_artifacts_are_immutable": true,
+    "sqlite_stores_model_metadata_paths_and_hashes_only": true,
     "duckdb_role": "read_only_analysis_query_only",
     "tsv_csv_exports_allowed_for_reports": true,
     "field_layers": {
@@ -1376,6 +1510,9 @@
       "rebalance_interval",
       "holding_period",
       "test_family_id",
+      "sleeve_id",
+      "factor_id",
+      "model_id",
       "hypothesis_family",
       "trial_index_in_family",
       "total_trials_in_family",
@@ -1384,6 +1521,8 @@
       "model_version",
       "model_artifact_hash",
       "fdr_method",
+      "ic_pvalue",
+      "bh_adjusted_pvalue",
       "fdr_q_value",
       "storey_q_value",
       "factor_test_correlation_metric",
@@ -1405,7 +1544,8 @@
       "gmsl_manifest_hash",
       "gmsl_shock_state_version",
       "csrp_signal_hit_rate",
-      "csrp_false_positive_rate"
+      "csrp_false_positive_rate",
+      "created_at"
     ],
     "holdout_access_log_required": true,
     "holdout_access_log_schema_version": "holdout_access_log_v1",

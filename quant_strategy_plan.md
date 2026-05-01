@@ -14,7 +14,7 @@
 - `D:\data\warehouse\audit_reports\leakage_check_report.json`
 - `checked_at=2026-04-30 09:48:02`
 - 21 类目录全部 PASS，新增覆盖 `features`、`labels`、`corporate_actions`、`global_macro_daily`、`gmsl_shock_state` 和 `geopolitical_event_calendar`
-- `validation_params.json` 版本：`2026-05-01-capital-overlay-segmented-sleeves`
+- `validation_params.json` 版本：`2026-05-01-final-review-v2-execution-hardening`
 - `warehouse_build_manifest.json` 记录当前表行数、最大数据日期、source status 和必须披露缺口
 - `feature_label_panel_v1_manifest.json`、`pit_feature_audit_market_daily_v1.json`、`label_audit_forward_returns_v1.json`、`source_status_audit_r7.json` 均已生成
 
@@ -173,7 +173,7 @@
 1. 分数分段 sleeve：保留最高分/Top-N 基线，同时测试 `P80-P95` 次高分段、`P60-P80` 中高分段和 `P40-P60` 中段诊断，检验收益是否只来自极端最高排名。低于 `P40` 默认不进入多头持仓，只作风险和反向信号诊断。
 2. 市值分段 sleeve：按当日 PIT 市值分位切成 `P0-P20`、`P20-P40`、`P40-P60`、`P60-P80`、`P80-P100`；默认可交易候选优先测试 `P20-P80` 中小到中大型区间，`P0-P20` 微盘段只作诊断或单独高风险 sleeve，不得放宽流动性、ST、停牌和涨跌停约束。
 
-这些 sleeve 必须使用同一训练窗、同一成本、同一交易规则和同一 walk-forward calendar；阈值必须在训练前写入实验登记，不能根据 OOT/holdout 结果挑选最优分段。
+这些 sleeve 必须使用同一训练窗、同一成本、同一交易规则和同一 walk-forward calendar；阈值必须在训练前写入实验登记，不能根据 OOT/holdout 结果挑选最优分段。所有 sleeve 尝试计入共享 `test_family_id` 和累计 `attempt_count`；sleeve 间 IC/PnL 差异检验作为独立假设计入 FDR，报告必须披露本实验族包含的 sleeve 数、BH 校正后阈值和 Storey-q 诊断。
 
 Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱动告警”：
 
@@ -184,6 +184,8 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 - 模型默认每 63 个交易日重训一次；S1-M 默认固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 默认每日重算分数、候选、风险告警和执行审计。两次重训之间使用最近一次符合 computed purge 规则的冻结模型版本。冻结模型必须登记 `model_version`、`train_end`、panel/label hash、参数 hash、代码提交、artifact hash、随机种子和回滚原因；命名建议为 `{track_id}_{model_family}_{train_end}_{validation_params_hash8}_{commit8}`。
 - 对评审报告中“GMSL red 或 IC 连续 3 步为负触发重训”的建议，当前 S1 不采纳为自动重训规则：GMSL 仍是 candidate/report-only，不能触发模型切换或重训；IC 连续 3 步为负只能提前触发预注册 revalidation 报告。冻结模型替换必须来自预注册重训日或独立 revalidation 失败后的新版本登记，且不得使用当前 step、holdout 或未成熟标签反馈。
 - Concept shift 告警只使用已成熟 OOT IC、因子收益或预测前已可得的分布/拥挤度指标；连续 6 步成熟 IC < 0 触发 red quarantine，最近 6 步中至少 5 步为负触发 yellow。告警只触发 report/quarantine/pre-registered revalidation，不改变当前 step 模型、alpha、阈值、early stopping、特征选择或仓位。
+- OOT 报告必须披露 IC lag-1 自相关和最小可检测效应功效边界。5/6 yellow 门槛不能只用独立二项分布解释；若 IC lag-1 自相关 `rho > 0.3`，必须用 block bootstrap 估计误报率和功效，功效不足时只能标记 `inconclusive - insufficient power` 或增加成熟 OOT 证据，不得临场放宽阈值。
+- CSRP 误报率必须预注册命中窗口和命中标准：默认信号后 3 个 OOT step 为命中窗口，主口径为其中至少 2 步成本后组合收益低于 benchmark，辅助报告为至少 2 步成熟 IC < 0；`n_signals < 5` 不报告点估计，`n_signals < 20` 不得作为 tighten-only 依据。
 - 动态 IC 换手公式只能作为 Phase 2 report-only 或 tighten-only 诊断；输入必须是至少滞后一 step 的成熟 trailing IC。验证前有效上限必须写成 `min(0.10, raw_report_only_formula)`，trailing IC 变好也不得 loosen 到 15%，只能报告或收紧。
 - 结构性 regime map、GMSL shock-state、拥挤容量和风险响应只能作为预注册 CSRP/GMSL 生产前风险审计；风险开关必须在完整 walk-forward 中独立验证，不得由临场主观判断覆盖。
 - 3 年窗口、anchored post-2023 或多候选模型库不进入 S1/S1.5 当前路径；未来若单独研究，只能作为后置协议，并且每个 step 的选择必须只由训练窗内部 nested validation 决定。
@@ -324,7 +326,7 @@ Concept shift 处理采用“单轨强基线 + 预注册训练权重 + 数据驱
 
 Phase A0 按阻塞关系拆成 A0.1 和 A0.2：
 
-- **A0.1，阻塞 S1 启动**：`track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`validation_params.json` 参数 hash、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计。
+- **A0.1，阻塞 S1 启动**：`track_registry_v1`、`walk_forward_calendar_S1M_v1`、S1-D/S1-R calendar skeleton、`WalkForwardCalendarValidator`、`validation_params.json` 参数 hash、`universe_daily_construction_audit`、valuation coverage audit、停牌推断 precision/recall 和估值 `available_at` 抽样审计。
 - **A0.2，阻塞 S1 keep**：`holdout_access_log.tsv`、`test_family_registry`、冻结模型 registry、SQLite WAL `experiment_ledger`、factor direction registry、ModelRegistry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` 和数据版本 hash 机制。
 
 目标：为 S1-M 月选股正式 alpha 主线建立可复现、可审计的启动底座，并为 S1-D/S1-R 日频风险/执行主线固化独立登记、日历、GMSL shock-state、execution label 和离线审计接口。
@@ -335,7 +337,7 @@ Phase A0 按阻塞关系拆成 A0.1 和 A0.2：
 - `warehouse_build_manifest.json`、`external_data_sources.csv`、`validation_params.json`、`track_registry_v1` 和 `walk_forward_calendar_v1` 的 hash。
 - 实验层 PIT audit、split label audit、benchmark audit。
 - 三层 universe 构造审计报告。
-- `holdout_access_log.tsv`、SQLite WAL 实验台账字段、`track_id`、`label_id`、`rebalance_interval`、`holding_period`、`execution_rule_id` 和 `panel_hash`。
+- `holdout_access_log.tsv`、SQLite WAL 实验台账 schema、ModelRegistry 持久化结构、`track_id`、`label_id`、`rebalance_interval`、`holding_period`、`execution_rule_id`、`sleeve_id` 和 `panel_hash`。
 - 2026 估值缺口 mask、forward-fill 敏感性和受影响样本报告。
 - benchmark 覆盖股票数审计，2005 前 benchmark 仅作敏感性说明。
 - 涨跌停禁买/跌停禁卖、连续锁死、开盘冲击和成交失败报告。
@@ -376,7 +378,7 @@ Phase A0 按阻塞关系拆成 A0.1 和 A0.2：
 产出：
 
 - 市场状态变量库。
-- 资金仓位控制模块：选股模型先生成目标股票篮子，资金模块再按市场状态给组合目标市值乘以 capital multiplier；现金部分不追买、不加杠杆、不参与收益承诺。
+- 资金仓位控制模块：选股模型先生成满仓目标股票篮子，先执行换手/行业/个股分层裁剪并归一化到 1.0，再按市场状态乘以 capital multiplier；现金部分不追买、不加杠杆、不参与收益承诺。
 - 仓位开关对照实验：至少包含 full-investment 对照、保守映射 `牛市 80%-100% / 震荡 40%-70% / 熊市 0%-30% / 极端风险 0%`、挑战映射 `100/60/30/0` 和固定低仓位对照。
 - CSRP/GMSL 稳健性：等权 5 年、12 月半衰期 row-equal/date-balanced 指数衰减、18 月半衰期敏感性、结构性 regime map、GMSL shock-state、拥挤容量、forced deleveraging 和成熟 IC 状态机对照；必须同口径击败等权控制且通过全部审计才可晋级。
 - 风险开关 v1：S3 前使用 25/25/25/25 均匀权重占位；S3 验证后替换为数据驱动仓位比例。100/60/30/0 只保留为可选历史假设或挑战基线，不作为默认事实。
