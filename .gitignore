@@ -1,0 +1,10 @@
+﻿# Agent intermediate files (local only)
+*_agent_*.md
+*_discuss_*.md
+consensus_*.md
+discussion_detail_*.md
+deepseek_r*.md
+review_r*.md
+*_audit_report_*.md
+三方审计报告_*.md
+FINAL_REVIEW_REPORT.md

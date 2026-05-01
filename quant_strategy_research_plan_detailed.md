@@ -18,7 +18,7 @@
 2. 回测交易假设保守。
 3. 成本后仍有样本外价值。
 4. 年度、市场状态和参数扰动下不过度脆弱。
-5. 复杂度增加能被增量收益或风险改善解释。
+5. 模型自由度增加能被增量收益或风险改善解释。
 
 ### 1.2 硬性时点约束
 
@@ -38,7 +38,7 @@ feature_time <= available_at <= decision_time < execution_time <= label_end_time
 
 ### 1.2.1 主线登记：S1-M 月频 alpha + S1-D/S1-R 日频风险/执行
 
-S1 阶段采用“月频 alpha 主线 + 日频风险/执行主线”的双主线治理，但不是两条 alpha 主线。`S1-M` 是近期唯一正式 alpha keep 主线；`S1-D/S1-R` 是正式日频风险/执行主线，用于短期 IC、alpha 衰减、风险预警、订单失败、流动性、GMSL shock state、候选接口和离线执行审计。`S1-D` 表示 Daily signal/risk diagnostics；`S1-R` 表示 Rebalancing/Risk execution audit，可触发 revalidation/quarantine 报告，但不得直接改变 `S1-M` 的 alpha、特征、阈值、半衰期或训练窗口。二者仍必须独立登记，且不得把 `S1-D/S1-R` 的 OOT、holdout 或 stress slice 结果用于选择 `S1-M` 的模型、阈值、半衰期或训练窗口。
+S1 阶段采用“月频 alpha 主线 + 日频风险/执行主线”的双主线治理，但不是两条 alpha 主线。`S1-M` 是当前唯一正式 alpha keep 主线；`S1-D/S1-R` 是正式日频风险/执行主线，用于短期 IC、alpha 衰减、风险预警、订单失败、流动性、GMSL shock state、候选接口和离线执行审计。`S1-D` 表示 Daily signal/risk diagnostics；`S1-R` 表示 Rebalancing/Risk execution audit，可触发 revalidation/quarantine 报告，但不得直接改变 `S1-M` 的 alpha、特征、阈值、半衰期或训练窗口。二者仍必须独立登记，且不得把 `S1-D/S1-R` 的 OOT、holdout 或 stress slice 结果用于选择 `S1-M` 的模型、阈值、半衰期或训练窗口。
 
 | track_id | 名称 | 主标签 | 决策和执行 | 调仓/持有 | 默认重训 | 当前数据状态 |
 |---|---|---|---|---|---|---|
@@ -469,16 +469,16 @@ AkShare 接入后再进入：
 9. 深度时序模型。
 10. NLP / RL。
 
-任何复杂模型必须在同一数据、同一股票池、同一成本、同一验证切分下对比强基线。
+任何高容量模型必须在同一数据、同一股票池、同一成本、同一验证切分下对比强基线。
 
 ### 6.1.5 训练权重、CSRP 和 GMSL
 
-Concept shift 的近期执行方案不采用双轨、动态 alpha 或在线 Track B，而是在 S1-M 正式主线的单轨 5 年 rolling 框架内加入预注册样本权重；S1-D/S1-R 以同样隔离规则做正式日频风险/执行报告，但不是 alpha keep 主线：
+Concept shift 的当前执行方案不采用双轨、动态 alpha 或在线 Track B，而是在 S1-M 正式主线的单轨 5 年 rolling 框架内加入预注册样本权重；S1-D/S1-R 以同样隔离规则做正式日频风险/执行报告，但不是 alpha keep 主线：
 
 - 等权 5 年 rolling 是必须保留的控制组。
 - 指数衰减主口径使用 `row_equal_decay_weight = 2 ** (-age_trading_days / (half_life_months * 21))`，其中 `age_trading_days` 是样本 `decision_time` 到当前 step `train_end` 的交易日年龄。
 - 必须同时报告 `date_balanced_decay_weight = date_weight_t / n_assets_t` 对照，其中 `date_weight_t = 2 ** (-age_trading_days_t / (half_life_months * 21))`，避免近年股票数扩张造成隐性双重加权。
-- `date-balanced` 的理论角色是把每个交易日作为近似等权经济观察，避免近年上市股票数扩张使 row-level 样本自动超配近期市场；若 row-equal 有效但 date-balanced 失败且没有预注册解释，状态只能是 `inconclusive` 或 discard。
+- `date-balanced` 的理论角色是把每个交易日作为近似等权经济观察，避免近年上市股票数扩张使 row-level 样本自动超配近年市场；若 row-equal 有效但 date-balanced 失败且没有预注册解释，状态只能是 `inconclusive` 或 discard。
 - 默认半衰期为 12 个月；18 个月作为预注册敏感性；6/24 个月作为必报诊断，36 个月只作可选研究网格；非默认半衰期全部计入 `attempt_count`，不能进入 keep 决策或用于 OOT/holdout 择优。
 - 21 个交易日/月只是默认换算因子；必须报告 19/21/23 交易日/月转换对样本权重、有效样本量和结果的敏感性，不得用该敏感性择优。
 - 每个训练 step 内将样本权重归一化到均值 1，并记录权重分布、最大/最小权重、有效样本量、每日股票数、每个日期总权重和 row-equal/date-balanced 结果差异。
@@ -513,7 +513,7 @@ Concept shift 的近期执行方案不采用双轨、动态 alpha 或在线 Trac
 
 ### 6.3 深度模型准入
 
-本地深度模型路线默认降级为轻量可复现对照。近期只保留轻量 LSTM 或 1D-CNN 作为 P4 对照；TFT、N-HiTS、PatchTST、iTransformer、Chronos/TimesFM/Moirai 等重模型归档为研究储备或云端实验，不能作为本地近期执行计划。
+本地深度模型路线默认降级为轻量可复现对照。当前只保留轻量 LSTM 或 1D-CNN 作为 P4 对照；TFT、N-HiTS、PatchTST、iTransformer、Chronos/TimesFM/Moirai 等重模型归档为研究储备或云端实验，不能作为本地当前执行口径。
 
 任何深度模型只有在满足以下条件后才能进入正式对照：
 
@@ -522,7 +522,7 @@ Concept shift 的近期执行方案不采用双轨、动态 alpha 或在线 Trac
 - 有明确额外收益来源，例如多周期分位数预测、波动率预测、场景生成。
 - 训练日志、随机种子、模型版本、输出缓存可复现。
 - 与 LightGBM/Ranker 同口径比较。
-- 先完成小模型 smoke test，明确硬件、随机种子、训练耗时和失败回滚条件。
+- 先完成小模型 smoke test，并固定硬件、随机种子、训练日志、产物 hash 和失败回滚条件。
 
 深度模型不得以“模型先进”为进入理由。
 
@@ -633,7 +633,7 @@ S1-D/S1-R 日频风险/执行补充规则：
 
 - 默认仍是每 63 个交易日重训；非重训 step 使用最近一次冻结模型，所有模型版本写入 ModelRegistry/frozen model registry。
 - 评审报告提出的“GMSL red 或 IC 连续 3 步为负触发重训”不进入当前 S1 自动执行规则。理由是 GMSL 仍处于 candidate/report-only，且成熟 IC 连续走弱会带来事后择优和反馈风险。
-- `GMSL red` 在 S1/S1.5 当前只能触发 stress report、人工复核清单或未来 tighten-only 候选记录，不得触发模型切换、重训、阈值调整、风险放宽或 alpha 升级。
+- `GMSL red` 在 S1/S1.5 当前只能触发 stress report、数据质量复核清单或未来 tighten-only 候选记录，不得触发模型切换、重训、阈值调整、风险放宽或 alpha 升级。
 - `IC 连续 3 步为负` 可作为 early revalidation trigger：提前生成预注册 revalidation 报告和冻结新 keep/晋级候选；只有 revalidation 按独立日历、独立参数 hash 和未污染样本失败后，才允许登记新冻结模型版本。
 
 Concept shift 硬规则：
@@ -783,7 +783,7 @@ benchmark 审计补充要求：
 
 ### 9.1 S1：S1-M 正式 alpha 主线 + S1-D/S1-R 日频风险/执行主线
 
-目标：回答当前 warehouse 下，S1-M 月选股是否存在真实、成本后、可交易的 market-only 股票 alpha，并同步验证 S1-D/S1-R 日频信号是否能作为正式风险/执行、订单失败、流动性和 GMSL stress 审计输入。S1-D/S1-R 不是近期日频 alpha keep 主线。
+目标：回答当前 warehouse 下，S1-M 月选股是否存在真实、成本后、可交易的 market-only 股票 alpha，并同步验证 S1-D/S1-R 日频信号是否能作为正式风险/执行、订单失败、流动性和 GMSL stress 审计输入。S1-D/S1-R 不是当前日频 alpha keep 主线。
 
 数据窗口：
 
@@ -797,7 +797,7 @@ track 定义：
 | `S1-M` | 月选股正式主线 | 20 日 forward excess/rank | 默认固定月末或月初首个交易日调仓；每 21 个交易日滚动仅作敏感性；低换手持有到下次再平衡 | 月末集中成交、持仓拥挤、长持有期回撤 |
 | `S1-D/S1-R` | 日频风险/执行正式主线，非 alpha keep 主线 | 1 日和 5 日 forward excess/rank | 每日盘后候选、风险预警、GMSL shock state 和离线执行审计；默认不主动调仓 | 高换手、成本拖累、涨跌停/停牌成交失败、短期噪声 |
 
-`S1-M` 是近期唯一正式 alpha 主线；`S1-D/S1-R` 是正式日频风险/执行主线，但不得进入近期主动 alpha 调仓或 official keep。二者必须各自有独立 `track_id`、calendar、label、orders audit、capacity report、execution label audit 和实验台账，不得把 `S1-D/S1-R` 的 OOT、holdout 或 stress slice 结果作为 `S1-M` 的模型、阈值、半衰期或窗口选择依据。
+`S1-M` 是当前唯一正式 alpha 主线；`S1-D/S1-R` 是正式日频风险/执行主线，但不得进入当前主动 alpha 调仓或 official keep。二者必须各自有独立 `track_id`、calendar、label、orders audit、capacity report、execution label audit 和实验台账，不得把 `S1-D/S1-R` 的 OOT、holdout 或 stress slice 结果作为 `S1-M` 的模型、阈值、半衰期或窗口选择依据。
 
 模型顺序：
 
@@ -879,7 +879,7 @@ Soft Floor（报告并评估，不满足需说明理由）：
 
 ### 9.1.5 S1.5：Concept Shift Resilience Protocol
 
-目标：在 S1-M 正式强基线已经完成、可复现并通过主审计后，评估低复杂度时间衰减权重、结构性 regime 稳健性、GMSL 外生冲击和拥挤容量是否能降低回撤、左尾和执行失败；S1-D/S1-R 可作为风险/执行主线参加 CSRP/GMSL 验证。S1.5 不是替代训练轨，不改变当前 step 预测或仓位，不替代 S1-M 主证据，也不阻塞 S1 启动；但它阻塞“可部署策略”或“生产准备完成”的叙事。
+目标：在 S1-M 正式强基线已经完成、可复现并通过主审计后，评估低自由度时间衰减权重、结构性 regime 稳健性、GMSL 外生冲击和拥挤容量是否能降低回撤、左尾和执行失败；S1-D/S1-R 可作为风险/执行主线参加 CSRP/GMSL 验证。S1.5 不是替代训练轨，不改变当前 step 预测或仓位，不替代 S1-M 主证据，也不阻塞 S1 启动；但它阻塞“可部署策略”或“生产准备完成”的叙事。
 
 候选方案：
 
@@ -903,7 +903,7 @@ Soft Floor（报告并评估，不满足需说明理由）：
 - 用当前 OOT 或 holdout 结果在 row-equal 与 date-balanced 之间择优。
 - 用 Step k 尚未成熟的 label 训练任何会影响 Step k 或未满足 purge/embargo 的后续 step 的模型。
 - 把 `p<0.05` 的 Chow 检验、ADWIN/Page-Hinkley/BOCPD 告警或 PSI/MMD 漂移写成 concept shift 已被确认；它们只能作为报告项和状态机辅助证据。
-- 用人工主观判断覆盖状态机、keep、discard、quarantine 或 revalidation 规则；人工只能检查数据质量问题，不能改变策略结论。
+- 用临场主观判断覆盖状态机、keep、discard、quarantine 或 revalidation 规则；复核只能检查数据质量问题，不能改变策略结论。
 - 恢复 Track A/B、动态 alpha、在线 Track B、anchored post-2023 keep 或 same-step label feedback。
 - 把 stress slice 作为优化窗口。
 - 用 GMSL 信号增加净敞口、杠杆、单票权重、行业集中或日换手；未通过 S3 独立验证前，GMSL 只能 report-only 或 tighten-only。
@@ -1163,9 +1163,9 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 - 年度表现不过度集中。
 - 模型排序指标方向一致。
 - 不依赖改变 benchmark、费用、股票池或窗口取胜。
-- 不依赖 stress slice、holdout、多权重口径或近期股票数扩张择优取胜。
+- 不依赖 stress slice、holdout、多权重口径或近年股票数扩张择优取胜。
 - 可执行 PnL 门槛通过，且 `orders_audit` 能解释成交层影响。
-- 实现复杂度与收益改善匹配。
+- 实现自由度与收益改善匹配。
 
 ### 11.2 Discard 规则
 
@@ -1250,11 +1250,11 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 - 是否避免承诺未经验证的收益。
 - 是否明确 qant random 8/2 只是验证污染反例。
 - 是否把未经本地验证的收益路径只作为假设队列，而不是结论或承诺。
-- 是否没有用人工主观判断覆盖状态机、keep、discard、quarantine 或 revalidation 规则。
+- 是否没有用临场主观判断覆盖状态机、keep、discard、quarantine 或 revalidation 规则。
 
 ---
 
-## 13. 近期执行顺序
+## 13. 执行顺序
 
 ### Step 0：S1 启动前审计和日历固化
 
@@ -1349,20 +1349,20 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 
 ### Step 5：公司行为和外部低频数据 ETL
 
-公司行为、分红送配在 Phase A 期间可并行做最小 ETL，用于 total-return 和复权校验；作为 alpha 因子使用仍需等 source/available_at 审计通过。融资融券、北向、限售解禁、ETF flows、市场宽度/涨跌停压力、股指期货 basis/OI 和 GMSL 外生冲击源先做 source registration 和 candidate ETL；未通过 PIT/覆盖率/缺口、时区/session cutoff 和 source gap 审计前不得进入 keep。其他外部低频数据只有当 Step 1-4 证明基线稳定，且数据质量、合规和资源排期可验收后启动；任何人工复核不得主观改变 keep/discard、模型切换、参数选择或告警处置。本节是后续数据收集、整理、清洗规划，除非用户另行授权，不执行新增抓取或入仓。
+公司行为、分红送配在 Phase A 期间可并行做最小 ETL，用于 total-return 和复权校验；作为 alpha 因子使用仍需等 source/available_at 审计通过。融资融券、北向、限售解禁、ETF flows、市场宽度/涨跌停压力、股指期货 basis/OI 和 GMSL 外生冲击源先做 source registration 和 candidate ETL；未通过 PIT/覆盖率/缺口、时区/session cutoff 和 source gap 审计前不得进入 keep。其他外部低频数据以 Step 1-4 的基线稳定性证据、数据质量、合规和 source/available_at 审计结果为前置条件；任何复核不得主观改变 keep/discard、模型切换、参数选择或告警处置。本节是后续数据收集、整理、清洗规划，除非用户另行授权，不执行新增抓取或入仓。
 
 后续补仓和清洗优先级：
 
 | 层级 | 数据/产物 | 目的 | 收集整理清洗方案 | 未完成影响 |
 |---|---|---|---|---|
-| A0.1 governance | `track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`universe_daily_construction_audit`、valuation coverage audit | 让 S1-M 能启动正式 calendar 和基础样本边界 | 预计 2-3 周；从 exchange calendar、feature/label panel hash 和 `validation_params.json` 生成内部治理表；校验 purge、embargo、holdout 隔离、label maturity、窗口重叠率、停牌 precision/recall 和估值 `available_at` 抽样 | 阻塞官方 S1 启动 |
-| A0.2 keep governance / execution audit | `holdout_access_log.tsv`、`test_family_registry`、SQLite WAL `experiment_ledger`、冻结模型 registry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 防止 close-to-close 标签冒充账户 PnL，并让 S1 keep 可审计 | 预计 3-6 周；用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和执行规则生成 T+1 open/proxy、3/5 日分批、未成交 carryover、解锁反转、orders audit 和 ledger hash；先用日频 L1 代理，标明非分钟/集合竞价 | 阻塞 factor keep、holdout 终验、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
+| A0.1 governance | `track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`universe_daily_construction_audit`、valuation coverage audit | 让 S1-M 能启动正式 calendar 和基础样本边界 | 从 exchange calendar、feature/label panel hash 和 `validation_params.json` 生成内部治理表；校验 purge、embargo、holdout 隔离、label maturity、窗口重叠率、停牌 precision/recall 和估值 `available_at` 抽样 | 阻塞官方 S1 启动 |
+| A0.2 keep governance / execution audit | `holdout_access_log.tsv`、`test_family_registry`、SQLite WAL `experiment_ledger`、冻结模型 registry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 防止 close-to-close 标签冒充账户 PnL，并让 S1 keep 可审计 | 用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和执行规则生成 T+1 open/proxy、3/5 日分批、未成交 carryover、解锁反转、orders audit 和 ledger hash；先用日频 L1 代理，标明非分钟/集合竞价 | 阻塞 factor keep、holdout 终验、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
 | P1 total-return | 官方或授权公司行为主表 | 补全分红送配、除权除息和 total-return 会计 | 优先交易所/巨潮/授权源；统一 `asset_id`、公告日、股权登记日、除权日、现金分红、送转配；与当前 sanity reference 和 adjusted-vs-raw event-like 样本交叉校验 | 阻塞完整 total-return accounting 和基本面增强叙事 |
 | P1 execution data | `limit_events`、分钟/集合竞价/开盘成交明细 | 支持真实开盘冲击、未成交队列和日频 alpha sleeve | 先做 source registration 和样本日 smoke test；清洗为事件表和 1/5min 分区表，区分盘中可见字段和盘后统计字段，生成 `available_at/decision_time` 与成交失败审计 | 阻塞日频 alpha sleeve、精细执行和三段开盘模型 |
 | P1/P1.5 flows and derivatives | 融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI | 改善拥挤、资金流和风控解释 | 按源逐项登记 vendor/license/披露时点；统一交易日历和代码映射；做 coverage、重复键、异常值、PIT 和 leakage audit | 不阻塞 market-only S1-M，但阻塞可部署风控增强 |
 | P1.5 GMSL | GMSL-v1 partial stress report；GMSL-v2 FRED 替代源、DXY/USDCNH、UST、Brent/WTI/SC、全球股指/期货、MOVE、商品、地缘事件日历 | 完整外生冲击层 | v1 只使用 Cboe VIX/OVX/GVZ、国债收益率和 Shibor 的 candidate 数据输出 stress report；v2 为 FRED 超时源准备 fredapi、Nasdaq Data Link/Quandl、vendor mirror 或下载替代；所有海外源先转 UTC，再按 A 股 T 日 16:00 session cutoff 顺延；阈值只用训练窗 10 年 lookback 分位数计算；输出 coverage、timezone、source_fetch 和 shock-state audit | GMSL 继续只能 partial stress report，不能进入 alpha、选模或调阈值 |
 | P1 hygiene | schema registry 和 source registry 卫生 | 让数据升格和机器审计闭环可读可验 | 补登记 `corporate_actions`、治理产物、`limit_events`、`prices_minute/auction`；清理 GMSL schema 描述乱码；按 `availability_bucket/status` 做条件非空校验，并在升格前重算 schema/source registry hash | 不阻塞 market-only 研究，但阻塞数据升格 |
-| P2 alpha explainability | 财报公告日、分析师预期、股东户数、质押、龙虎榜、大宗交易、新闻事件 | 基本面和事件解释力 | 待 Step 1-4 稳定后再立项；先解决授权、披露时点、代码映射、文本去重和 survivorship；未审计前只做 candidate tracking | 不阻塞近期 S1-M |
+| P2 alpha explainability | 财报公告日、分析师预期、股东户数、质押、龙虎榜、大宗交易、新闻事件 | 基本面和事件解释力 | 以 Step 1-4 的稳定性证据为前置条件；先解决授权、披露时点、代码映射、文本去重和 survivorship；未审计前只做 candidate tracking | 不阻塞当前 S1-M |
 
 输出：
 
@@ -1410,19 +1410,19 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 
 ### 数据缺口影响量化（S1启动前必做）
 
-| 对比实验 | 目的 | 预计耗时 |
+| 对比实验 | 目的 | 证据要求 |
 |---------|------|---------|
-| 有/无ST过滤的因子IC对比 | 量化ST PIT缺口影响 | 2小时 |
-| 有/无停牌推断的可交易universe对比 | 量化停牌推断精度 | 1小时 |
-| valuation缺口三口径（drop/no-valuation/ffill） | 验证2026估值缺口对估值因子和holdout的影响 | 2-4小时 |
-| benchmark覆盖率分期审计 | 量化早期全A代理覆盖不足和2005主窗口合理性 | 1小时 |
-| ADV新股不足标记检查 | 确认capacity报告不被新股异常成交额污染 | 1小时 |
-| 不同embargo值（5/10/15）的OOT结果对比 | 敏感性报告，不择优；默认仍为 10 日 | 3小时 |
-| purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 8-16小时 |
-| block bootstrap block敏感性（10/21/42日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 2-4小时 |
-| concept shift预注册诊断 | 输出成熟 IC 状态机、描述性分段、分布漂移、拥挤容量和等权 vs row-equal/date-balanced 指数衰减对照；不放宽S1 hard gate | 4-8小时 |
+| 有/无ST过滤的因子IC对比 | 量化ST PIT缺口影响 | 同一 calendar、同一因子、同一成本口径，输出 IC delta、样本差异和剔除原因 |
+| 有/无停牌推断的可交易universe对比 | 量化停牌推断精度 | 输出 precision/recall 抽样审计、universe 差异和订单失败影响 |
+| valuation缺口三口径（drop/no-valuation/ffill） | 验证2026估值缺口对估值因子和holdout的影响 | 输出缺口 mask、样本覆盖、IC/holdout delta 和 ffill 上限 |
+| benchmark覆盖率分期审计 | 量化早期全A代理覆盖不足和2005主窗口合理性 | 输出年度 `coverage_assets`、proxy 差异和敏感性结论 |
+| ADV新股不足标记检查 | 确认capacity报告不被新股异常成交额污染 | 输出有效成交日、上市年龄、ADV mask 和容量差异 |
+| 不同embargo值（5/10/15）的OOT结果对比 | 敏感性报告，不择优；默认仍为 10 日 | 输出同一实验族下的 IC、HAC、bootstrap 和 holdout delta |
+| purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 输出样本损失、label overlap proxy、HAC、bootstrap、holdout 和成本后 PnL delta |
+| block bootstrap block敏感性（10/21/42日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 输出三组 block 的 p-value、置信区间和最保守结论 |
+| concept shift预注册诊断 | 输出成熟 IC 状态机、描述性分段、分布漂移、拥挤容量和等权 vs row-equal/date-balanced 指数衰减对照；不放宽S1 hard gate | 输出切片定义、状态机路径、shift 指标和对照组 delta |
 
-预备诊断的 24 步只作为最低验证规模和快速 smoke；完整主证据必须按交易日历生成全量 OOT step，单独估算耗时，不得用 24 步耗时代表最终 S1 全量运行成本。
+预备诊断的 24 步只作为最低验证规模和快速 smoke；完整主证据必须按交易日历生成全量 OOT step，并记录实际 step 数、样本覆盖和产物 hash。
 
 ## 14. 文档治理
 
