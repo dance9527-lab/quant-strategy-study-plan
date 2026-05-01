@@ -279,7 +279,7 @@ trailing ADV 规则：
 
 | 标签 | 计算 | 用途 | 正式证据 computed purge |
 |---|---|---|---|
-| `excess_ret_1d` | 个股 T+1 收益减 benchmark | S1-D 短期 IC、风险预警和 alpha 衰减监控标签；不单独构成主动调仓 keep 证据 | 40 个交易日 |
+| `excess_ret_1d` | 个股 T+1 收益减 benchmark | S1-D/S1-R 短期 IC、风险预警、alpha 衰减和执行审计标签；不单独构成主动调仓 keep 证据 | 20 个交易日；同时报告 10/20/40 敏感性，不支持 alpha keep |
 | `excess_ret_5d` | 个股未来 5 日超额收益 | S1-D 风控辅助和短 horizon 稳健性标签，用于降低 1 日噪声和换手敏感性 | 40 个交易日 |
 | `excess_ret_10d` | 个股未来 10 日超额收益 | qant 对照和中频模型 | 40 个交易日 |
 | `excess_ret_20d` | 个股未来 20 日超额收益 | S1-M 月选股主标签 | 60 个交易日 |
@@ -312,17 +312,19 @@ S1-D/S1-R 日频风险/执行当前只能使用已审计的 1 日和 5 日 forwa
 - 标签是否使用 adjusted-return proxy，是否受公司行为/total-return source gap 影响。
 - 是否为可执行标签；若只用 forward return，不得把它直接写成可执行 PnL。
 
-正式证据仍必须服从 `purge_days >= max(label_horizon*3, 40)`。因此 1 日标签也至少使用 40 个交易日 purge，不能因为 horizon 短就让训练样本贴近预测日。
+官方 alpha keep 证据仍必须服从 `purge_days >= max(label_horizon*3, 40)`。S1-D/S1-R 的 1 日标签是风险/执行报告特例，默认 20 个交易日 purge，并报告 10/20/40 敏感性；该口径只能用于短期 IC、misalignment 和 execution audit，不得单独支持主动调仓 keep。
 
 ### 4.4 execution-aligned label / PnL audit
 
 `labels/forward_returns_v1` 的 close-to-close adjusted forward label 适合因子 IC、RankIC 和排序研究，但不等于账户可交易收益。正式 keep、日频风险规则升级或任何日频 alpha sleeve 前，必须新增 `execution_label_audit` 或等价可交易 PnL 审计：
 
 - 比较 `close_to_close_adjusted`、`t_plus_1_open_or_proxy`、`vwap_or_split_execution_proxy` 三类标签/会计。
+- 增加 `rebalance_to_rebalance_execution_aligned` 标签，用于比较固定 20 日标签与实际调仓日到调仓日收益的 misalignment。
 - S1-M 必须报告 T+1 单日执行、3 日等额分批、5 日等额分批下的 execution-aligned PnL。
 - S1-D/S1-R 必须报告短持有期执行 PnL、未成交 carryover、跌停卖不出暴露、解锁后 1/3/5 日收益和成本 1x/2x/3x。
 - 最小字段模板：`exec_ret_20d_t1_open_to_next_rebalance`、`exec_ret_20d_t1_split_3d`、`exec_ret_20d_t1_split_5d`、`exec_ret_5d_t1_open_or_proxy`、`failed_order_carryover_return`、`unfilled_sell_drawdown`、`unlock_reversal_1d/3d/5d`。
-- 审计指标至少包括相关性、符号一致率、PnL drift、cost drag、failed-order carryover 和 execution fail rate。
+- 审计指标至少包括相关性、符号一致率、固定 horizon 与调仓间隔标签的 IC delta、PnL drift、cost drag、failed-order carryover 和 execution fail rate。
+- 若固定 20 日标签与调仓日到调仓日 execution-aligned 标签的 IC、RankIC 或成本后 PnL 偏差显著，S1-M keep 只能使用调仓间隔收益或标记为 `inconclusive`，不得用 fixed-horizon 好结果覆盖执行标签失败。
 - 若模型 IC 为正但 execution-aligned PnL 为负，状态只能是 `candidate` 或 `inconclusive`，不得 keep 或升级为 tighten-only/alpha sleeve。
 
 ### 4.4 qant 类 10 日标签特殊规则
@@ -357,21 +359,32 @@ S1-D/S1-R 日频风险/执行当前只能使用已审计的 1 日和 5 日 forwa
 
 “可构建”只表示当前 warehouse 字段足以计算候选因子，不等于可进入 keep。每个因子仍必须通过字段覆盖率、缺失率、异常值、`available_at`、`decision_time`、PIT 来源和缺口影响审计。
 
+因子方向和计数口径：
+
+- `factor_direction_registry_v1` 必须在 OOT 前登记每个因子的 `factor_id`、信息来源、方向置信层级、预注册方向、检验单双侧、所属 `test_family_id` 和是否允许翻转检查。
+- Tier 1 高置信因子需要至少 3 篇独立文献或等价可复现证据支撑，预注册方向，单侧检验阈值 `p<0.025`；首批包括市值、价值（EP/BP）、流动性和短期反转。
+- Tier 2 中置信因子需要 1-2 篇文献或强经济逻辑，预注册方向但保留翻转检查；首批包括动量和波动率。
+- Tier 3 探索性因子使用双侧检验 `p<0.01`，最多测试两个方向，必须计入完整实验族和 FDR。
+- 因子计数按独立信息来源和假设族计数，而不是按派生列膨胀；同一原始信号的窗口、标准化或中性化变体必须归入同一 `test_family_id` 并累计 `attempt_count`。
+- OOT 阶段不得根据结果调整因子方向；方向错误只能进入 discard、inconclusive 或下一轮预注册协议。
+- 行业分类默认使用申万一级 PIT 行业；若使用其他分类标准，必须在训练前登记 source、版本、覆盖率和映射 hash。
+
 因子 PIT 合规要求：
 
 - 估值、市值、股本和换手因子必须使用当日 `available_at` 与 `decision_time`；估值类字段不能假设财报披露早于实际公告日。
 - 2026-01-05 至 2026-02-05 的估值缺口必须生成缺口 mask；若对慢变量估值特征做有界 forward-fill，最长 25 个交易日，并同时报告 drop-gap、no-valuation 和 ffill 三种口径的敏感性。
 - 复权收益、动量和标签必须使用 `return_adjusted_pit` 或等价 PIT 调整收益；复权信息默认 T 日盘后可见、T+1 生效。
 - 月末或调仓截面必须只包含当时已存在、已上市且通过可交易过滤的证券，不得使用未来成分、当前行业快照或当前风险警示状态。
+- 停牌期间因子处理必须预注册为 `skip_new_entry`、`carry_forward_for_risk_accounting_only` 或其他等价规则；默认不允许因停牌而从 IC 研究样本静默删除风险暴露。若 forward-fill 因子值，只能用于已持仓风险会计和执行失败解释，并报告对 IC、PnL、turnover 和 execution fail rate 的影响。
 - 所有新因子进入组合回测前必须通过因子 PIT 审计；未通过的因子只能用于离线诊断，不能进入 keep 决策。
 
 因子正交化执行规范：
 
 - 原始因子先完成缺失处理、winsorize、横截面 z-score，以及预注册的行业/市值中性化。
 - 单因子、等权和原始 ICIR 加权必须保留为基线；正交化只作为复合因子和线性模型的预注册对照分支，不替代原始因子主证据。
-- Gram-Schmidt 顺序只能由训练窗口内的 ICIR 降序确定；OOT、holdout 或全样本信息不得参与排序、方向选择或参数估计。
+- Gram-Schmidt V1 使用固定经济逻辑顺序：市场因子、行业因子、风格因子、alpha 候选因子；不得用 OOT、holdout 或全样本信息参与排序、方向选择或参数估计。PCA 只作为 V2 候选，不进入 S1 主线。
 - 每个调仓截面输出 `orthogonalized_factor_panel`，并记录 `orthogonalization_order`、输入覆盖率、缺失处理规则和方向约定。
-- 必须报告正交化前后因子相关性矩阵、IC/RankIC 变化、因子方向是否保持，以及与原始 ICIR 和 Ridge/ElasticNet 的同口径比较。
+- 必须报告正交化前后因子相关性矩阵、IC/RankIC 变化、因子方向是否保持、各 step 正交化顺序一致性、Spearman 稳定性，以及与原始 ICIR 和 Ridge/ElasticNet 的同口径比较。
 
 
 
@@ -410,7 +423,7 @@ AkShare 接入后再进入：
 1. 单因子。
 2. 等权打分。
 3. ICIR 加权。
-4. 训练窗 ICIR 排序后的 Gram-Schmidt 正交化复合因子。
+4. 固定经济逻辑顺序的 Gram-Schmidt 正交化复合因子。
 5. Ridge、ElasticNet。
 6. LightGBM / XGBoost。
 7. LightGBM Ranker / LambdaRank。
@@ -496,9 +509,9 @@ Concept shift 的近期执行方案不采用双轨、动态 alpha 或在线 Trac
 | embargo | 10 个交易日 |
 | OOT 起点 | 由交易日历生成，必须同时满足 5 年训练窗口、`train_end <= oot_start - computed_purge_days` 和 label maturity；通常落在 2010Q1 附近 |
 | 最少 OOT step | 24；这是最低验收门槛，不是总步数 |
-| IC 显著性 | 默认使用 Newey-West HAC 调整后的 IC t-stat；普通 t-stat 只能作为诊断 |
-| bootstrap | Block Bootstrap，组合收益默认 `block_days=max(label_horizon, rebalance_interval)`，至少 5000 次；S1-D/S1-R 默认 block=21 日，敏感性 5/10/21/40 日，晋级或生产 tighten-only 使用 10/21/40 中最保守结论 |
-| 多重检验 | 候选因子 > 20 个时必须做 FDR 校正；默认 Benjamini-Hochberg，因子相关性高或有效假设数不清晰时补 Storey-q 诊断；相关性触发阈值和有效假设数需写入实验台账 |
+| IC 显著性 | 默认使用 Newey-West HAC 调整后的 IC t-stat；报告默认公式、Andrews (1991)、lag 6、lag 12 四种带宽敏感性，keep/晋级取最保守结论；普通 t-stat 只能作为诊断 |
+| bootstrap | Block Bootstrap，组合收益默认 `block_days=max(label_horizon, rebalance_interval)`，至少 5000 次；默认 block=21 日，敏感性 10/21/42 日，晋级或生产 tighten-only 使用最保守结论 |
+| 多重检验 | FDR 覆盖完整实验族：因子 × 标签 × 模型 × 半衰期 × 训练窗口 × 正交化分支 × 执行规则；默认 Benjamini-Hochberg，因子相关性高或有效假设数不清晰时补 Storey-q 诊断；`attempt_count` 跨完整 family 累计 |
 | holdout | 最后 12 个月（约 252 个交易日）作为最终验收窗口；不参与调参、特征选择、early stopping、阈值选择、GMSL 阈值或仓位开关选择；通过条件至少为方向一致、成本后超额 > 0、Sharpe > 0、回撤/CVaR 不显著差于 benchmark 或等权控制，且单月利润贡献不超过 50%；`holdout_access_log.tsv` 必须记录 timestamp、operator、purpose、track_id、data_range、result_summary、decision_or_read_only、pollution_flag 和 followup_action；若 holdout 被用于策略选择即 burned，生产前需新增不少于 252 个交易日的 shadow/forward OOS |
 
 必须生成 `walk_forward_calendar_v1.parquet` 或等价表，并在每个预测文件中引用 `step_id` 和 `walk_forward_calendar_hash`。最小字段：
@@ -528,6 +541,8 @@ frozen_model_version
 holdout_flag
 ```
 
+必须实现 `WalkForwardCalendarValidator` 或等价校验报告，逐 track 检查 `computed_purge_days`、embargo、holdout 隔离、label maturity、训练窗口重叠率、`model_refit_flag`、`frozen_model_version` 和 prediction file 的 calendar hash。先生成并验证 S1-M 月频 calendar，再扩展 S1-D/S1-R 日频风险/执行 calendar；两个 track 必须通过独立 `track_id` 关联，不得共用 OOT/holdout 结果择优。
+
 主证据：
 
 - chronological walk-forward。
@@ -545,6 +560,7 @@ S1-D/S1-R 日频风险/执行补充规则：
 - IC/Ranks IC 先按日计算，再形成日度 IC 序列做 HAC/Newey-West、block bootstrap、日/周/月/季汇总和 concept shift + GMSL 状态机。
 - 默认不生成主动调仓组合；离线组合模拟必须处理重叠持仓、T+1、100 股整数手、涨跌停/停牌订单失败、未成交继续暴露、每日换手和 execution-aligned PnL，模拟结果不得直接进入 official keep。
 - 三层换手控制用于离线审计和未来升级门槛：与前一日持仓重叠率 >=85%、单票日变动 <=2%、单边日换手 <=10%。
+- 换手冲突处理采用分层裁剪算法：先计算理想调仓权重；先按规则 3 总换手上限等比例缩减；再按规则 2 行业上限对超限行业等比例缩减；最后按规则 1 个股上限裁剪单票变化；每层后重新归一化，并输出裁剪前后权重、超限资产/行业、残余现金或未成交权重。
 - 动态 IC 换手公式只能作为 Phase 2 report-only 或 tighten-only 诊断；输入必须是至少滞后一 step 的成熟 trailing IC。验证前有效上限必须写成 `min(0.10, formula)`，trailing IC 变好也不得 loosen 到 15%，只能报告或收紧。
 - report-only 风险监控至少需要 252 个成熟日度决策日和 12 个自然月桶；任何生产 tighten-only 规则至少需要 504 个成熟日度决策日、24 个自然月桶和 8 个季度桶。日频 alpha sleeve 还必须等待分钟/集合竞价/limit_events、独立 holdout、成本 1x/2x/3x 和容量审计。
 
@@ -570,10 +586,17 @@ S1-D/S1-R 日频风险/执行补充规则：
 - random 只能作为 blocked random 诊断，且必须同时有 `validation_purge_days` 和 `embargo_days`。
 - 未报告 split label audit 的模型结果不得进入 keep、晋级或总纲结论。
 - IC 序列、重叠标签或相邻 walk-forward step 的训练窗口重叠率必须在报告中披露；重叠率按实际 `training_window_days` 和 `step_days` 计算，不使用未经核验的固定百分比。
-- Newey-West 实现必须估计 IC 序列均值的 HAC 标准误：`se_mean = sqrt(long_run_variance / n)`，`t_hac = mean(IC) / se_mean`；如果库函数已经返回均值标准误，不得再次除以 `sqrt(n)`。默认带宽使用预注册确定性规则 `lag=max(1, floor(4*(n/100)^(2/9)))`，除非实验登记在启动前明确替换为另一条确定性规则。
+- Newey-West 实现必须估计 IC 序列均值的 HAC 标准误：`se_mean = sqrt(long_run_variance / n)`，`t_hac = mean(IC) / se_mean`；如果库函数已经返回均值标准误，不得再次除以 `sqrt(n)`。默认带宽使用预注册确定性规则 `lag=max(1, floor(4*(n/100)^(2/9)))`，并同时报告 Andrews (1991)、lag 6 和 lag 12 敏感性；keep/晋级取四种带宽中的最保守结论。
 - 24 个 OOT step 属于小样本，HAC t-stat 与 block bootstrap 都必须报告；keep/晋级必须同时满足 Newey-West HAC t-stat >= 1.65 和 block bootstrap p < 0.10。若只有一项通过，状态为 `inconclusive`，不能在 naive、HAC 和不同 block 敏感性之间择优。
-- 组合收益 bootstrap 的 `block_days=max(label_horizon, rebalance_interval)`；纯 IC 诊断可预注册 `max(label_horizon, empirical_acf_cutoff)`，但 keep/晋级前必须报告 10/21/40 日敏感性。
+- 组合收益 bootstrap 的 `block_days=max(label_horizon, rebalance_interval)`；纯 IC 诊断可预注册 `max(label_horizon, empirical_acf_cutoff)`，但 keep/晋级前必须报告 10/21/42 日敏感性。
 - 偏离本文档和 `validation_params.json` 的预注册参数时，必须在实验启动前写明原因，并在报告中列出参数 hash 和实际参数；`validation_params.json` 是 Git 中的机器可读镜像。若镜像与本文档冲突，以本文档为准并先修正镜像后再执行。
+
+模型重训和事件触发规则：
+
+- 默认仍是每 63 个交易日重训；非重训 step 使用最近一次冻结模型，所有模型版本写入 ModelRegistry/frozen model registry。
+- 评审报告提出的“GMSL red 或 IC 连续 3 步为负触发重训”不进入当前 S1 自动执行规则。理由是 GMSL 仍处于 candidate/report-only，且成熟 IC 连续走弱会带来事后择优和反馈风险。
+- `GMSL red` 在 S1/S1.5 当前只能触发 stress report、人工复核清单或未来 tighten-only 候选记录，不得触发模型切换、重训、阈值调整、风险放宽或 alpha 升级。
+- `IC 连续 3 步为负` 可作为 early revalidation trigger：提前生成预注册 revalidation 报告和冻结新 keep/晋级候选；只有 revalidation 按独立日历、独立参数 hash 和未污染样本失败后，才允许登记新冻结模型版本。
 
 Concept shift 硬规则：
 
@@ -743,7 +766,7 @@ track 定义：
 1. 单因子。
 2. 等权打分。
 3. ICIR 加权。
-4. 训练窗 ICIR 排序后的 Gram-Schmidt 正交化复合因子。
+4. 固定经济逻辑顺序的 Gram-Schmidt 正交化复合因子。
 5. Ridge / ElasticNet。
 6. LightGBM。
 7. LightGBM Ranker。
@@ -786,7 +809,7 @@ Hard Gate（一票否决，必须全部通过）包含两个主门槛：统计 a
 - 因子 PIT audit、split label audit、benchmark audit 通过。
 - RankIC 或核心 IC 均值为正，且 Newey-West HAC 调整后的 t-stat >= 1.65，并且 block bootstrap p-value < 0.10；HAC 和 bootstrap 都必须报告。若只有一项通过，状态为 `inconclusive`，不能 keep 或晋级；若普通 t-stat 与 HAC/block bootstrap 结论冲突，采用更保守口径。
 - holdout 为最后 12 个月，方向和主窗口一致，且至少满足：成本后超额收益 > 0、Sharpe > 0、MaxDD 和 CVaR 不显著差于 benchmark 或等权控制、单月利润贡献不超过 50%、订单失败/成本/容量均在预注册边界内；holdout 不得用于 GMSL 阈值、shock window、行业规则、风控规则或日频 tighten-only 规则选择。
-- 候选因子 > 20 个且结果用于 keep/晋级时，FDR 校正后仍通过预注册显著性要求。
+- 任何 keep/晋级决策都必须按完整 `test_family_id` 口径累计 `attempt_count`；当完整实验族累计尝试数超过 20 时，FDR 校正后仍需通过预注册显著性要求。候选因子列数 >20 只作为风险提示，不是唯一触发条件。
 
 可执行 PnL 门槛：
 
@@ -827,7 +850,8 @@ Soft Floor（报告并评估，不满足需说明理由）：
 - Date-balanced exponential decay control：5 年 rolling，默认半衰期 12 个月，`date_balanced_decay_weight = date_weight_t / n_assets_t`，每个训练 step 内归一化到均值 1。
 - Exponential decay sensitivity：18 个月为预注册敏感性；6/24 个月为必报诊断，36 个月只能作为可选研究网格，进入 `attempt_count`，不得用 OOT/holdout 事后择优。
 - Refit frequency：默认每 63 个交易日重训一次；S1-M 固定月末/月初调仓/预测，21 日滚动为敏感性；S1-D/S1-R 每日预测候选、风险告警和执行审计但不默认每日重训；月度重训或每日重训只能作为预注册敏感性。
-- Alert state machine：最近 6 个已成熟 OOT step 中至少 4 步 IC < 0 标记 yellow；连续 6 步 IC < 0 标记 red quarantine。状态机只冻结新 keep/晋级或触发 revalidation 报告，不直接改变当前 step 预测、仓位、阈值、特征或 early stopping。
+- Alert state machine：最近 6 个已成熟 OOT step 中至少 5 步 IC < 0 标记 yellow；连续 6 步 IC < 0 标记 red quarantine。状态机只冻结新 keep/晋级或触发预注册 revalidation 报告，不直接改变当前 step 预测、仓位、阈值、特征或 early stopping。
+- Alpha 衰减监控和 concept shift 状态机分开报告：滚动 6 月/季度 IC 趋势用于衰减诊断，yellow/red 状态机用于 shift/quarantine；两者都不能单独触发当前 step 模型变更。
 - CSRP 误报率：在 walk-forward OOT 窗口内逐期记录 CSRP 信号，统计信号发出后预注册固定窗口内事件或风险恶化是否命中；`false_positive_rate = 1 - hit_rate`。必须报告 `n_signals`、命中窗口、Wilson 或 bootstrap 置信区间、随机 shuffle 信号时间戳形成的 baseline p-value；若信号数过少或排列检验 p > 0.05，CSRP 信号只可报告，不得作为生产 tighten-only 依据。
 - Dynamic IC turnover：公式 `0.10 * min(max(0.5, trailing_matured_ic / 0.03), 1.5)` 只作为 `raw_report_only_formula`。输入必须是至少滞后一 step 的成熟 IC；验证前只有 `effective_cap_formula_before_validation=min(0.10, raw_report_only_formula)` 可进入执行口径，且只能 report-only 或 tighten-only，不能因 trailing IC 变好放宽到 15%。
 - Structural regime map：科创板注册制、创业板注册制、北交所、全面注册制、新国九条、2024Q1 量化拥挤压力和程序化交易监管作为预注册诊断/生产前审计段，不作为选模窗口。
@@ -1038,7 +1062,7 @@ S2 通过条件：
 | `shareholder_structure/shareholder_households_quarterly` | `asset_id, stat_date, holders, holders_prev, holders_change_pct, avg_holding_qty, avg_holding_mv, announcement_date, available_at` |
 | `risk_pressure/pledge_ratio_snapshot` | `asset_id, trade_date, pledge_ratio, pledged_shares, pledge_mv, pledge_count, available_at` |
 | `event_supply/restricted_release_events` | `asset_id, release_date, release_shares, release_mv, holder_type, announcement_date, available_at` |
-| `execution_audit/orders_audit` | `run_id, step_id, asset_id, trade_date, side, offline_sim_target_weight, intended_order_value, blocked_reason, filled_value, unfilled_value, delay_days, limit_lock_chain_length, unlock_date, post_unlock_return_1d/3d/5d`; 生产订单接口禁用 `target_weight`，未来风控生产字段只能使用 `risk_overlay_action/risk_overlay_reason/max_allowed_participation/no_buy_flag/defer_rebalance_flag/reduce_only_flag` |
+| `execution_audit/orders_audit` | S1 最小字段：`run_id, step_id, asset_id, trade_date, side, offline_sim_target_weight, intended_order_value, execution_price, execution_slippage, order_status, blocked_reason, filled_value, unfilled_value, delay_days, limit_lock_chain_length, unlock_date, post_unlock_return_1d/3d/5d`；S1.5 可补 `cost_breakdown, prev_weight, turnover_contribution`；生产订单接口禁用 `target_weight`，未来风控生产字段只能使用 `risk_overlay_action/risk_overlay_reason/max_allowed_participation/no_buy_flag/defer_rebalance_flag/reduce_only_flag` |
 
 ### 10.3 外部数据质量检查
 
@@ -1062,7 +1086,14 @@ S2 通过条件：
 
 ## 11. 实验台账
 
-所有实验记录到 `D:\quantum_a0\autoresearch_results.tsv` 或其扩展版。Git 项目中的正式策略维护应同步保留台账 schema。建议字段：
+正式实验台账使用 SQLite WAL，推荐路径为 `D:\quantum_a0\experiment_ledger.sqlite`；DuckDB 只用于只读分析查询，TSV/CSV 只作为报告导出，不作为 canonical ledger。字段按四层组织：
+
+- 核心层：`run_id`、`track_id`、`label_id`、`calendar_id`、`hypothesis`、`commit`、`status`、`decision` 等必填身份和决策字段。
+- 验证层：IC/RIC、HAC t-stat、bootstrap p、Sharpe、max drawdown、holdout、成本后 PnL 等自动填充指标。
+- 审计层：leakage、PIT factor、split label、benchmark、execution label、orders、GMSL 和 holdout burned 状态。
+- 元数据层：warehouse/source/calendar/validation/model/artifact hash、依赖 lock、命令、随机种子和环境信息。
+
+SQLite 表必须覆盖以下字段；报告导出的 TSV/CSV 也应保留同名列：
 
 ```tsv
 run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_id	hypothesis	commit	changed_files	warehouse_build_manifest_hash	source_registry_hash	walk_forward_calendar_hash	validation_params_hash	data_window	validation_mode	decision_frequency	rebalance_interval	holding_period	base_purge_days	purge_multiplier	computed_purge_days	validation_purge_days	embargo_days	validation_block_days	holdout_window	holdout_access_count	holdout_burned_flag	test_family_id	hypothesis_family	trial_index_in_family	total_trials_in_family	selection_path	pre_registered_or_exploratory	date_weighting_scheme	half_life_months	universe_rule_version	execution_label_id	execution_label_audit_path	gmsl_manifest_hash	gmsl_shock_state_version	command	primary_metric	guardrails	attempt_count	total_return	CAGR	Sharpe	deflated_sharpe	pbo	max_drawdown	holdout_total_return	holdout_sharpe	holdout_max_drawdown	excess	turnover	cost_drag	capacity_tier	crowding_risk_score	limit_lock_cvar	execution_fail_rate	limit_up_buy_fail_count	limit_down_sell_fail_count	orders_audit_path	best_iteration_mean	rank_ic_mean	ic_t_stat	bootstrap_p	leak_audit_status	split_label_audit_status	pit_factor_audit_status	benchmark_audit_status	execution_label_audit_status	gmsl_audit_status	status	decision	notes
@@ -1226,7 +1257,7 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 
 - S1-M 输出正式 IC / RankIC / ICIR；S1-D/S1-R 输出日频风险/执行 IC / RankIC / ICIR，不得混成一个 S1 alpha 指标或用 S1-D/S1-R 选择 S1-M。
 - Newey-West HAC IC t-stat、普通 t-stat 诊断值和 block/bootstrap p-value；S1-D/S1-R 先按日计算 IC，再按日/周/月/季汇总。
-- 5/10/21/40 日 `block_days` 敏感性；S1-D/S1-R 默认 block=21，晋级或生产 tighten-only 使用 10/21/40 中最保守结论。
+- 10/21/42 日 `block_days` 敏感性；S1-D/S1-R 默认 block=21，晋级或生产 tighten-only 使用最保守结论。
 - Top-Bottom。
 - 分年度稳定性。
 - 季度滚动 IC 衰减监控。
@@ -1268,12 +1299,12 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 
 | 层级 | 数据/产物 | 目的 | 收集整理清洗方案 | 未完成影响 |
 |---|---|---|---|---|
-| P0 governance | `track_registry_v1`、`walk_forward_calendar_v1`、`holdout_access_log.tsv`、`test_family_registry` | 让 S1-M 和 S1-D/S1-R 的验证边界可复现 | 从 exchange calendar、feature/label panel hash 和 `validation_params.json` 生成内部治理表；记录 `computed_purge_days`、label maturity、holdout flag、attempt count 和访问日志；输出 hash 与 schema registry | 阻塞官方 S1 主证据和 holdout 终验 |
-| P0 execution audit | `execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 防止 close-to-close 标签冒充账户 PnL | 用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和执行规则生成 T+1 open/proxy、3/5 日分批、未成交 carryover、解锁反转和 orders audit；先用日频 L1 代理，标明非分钟/集合竞价 | 阻塞 factor keep、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
+| A0.1 governance | `track_registry_v1`、`walk_forward_calendar_S1M_v1`、`WalkForwardCalendarValidator`、`universe_daily_construction_audit`、valuation coverage audit | 让 S1-M 能启动正式 calendar 和基础样本边界 | 预计 2-3 周；从 exchange calendar、feature/label panel hash 和 `validation_params.json` 生成内部治理表；校验 purge、embargo、holdout 隔离、label maturity、窗口重叠率、停牌 precision/recall 和估值 `available_at` 抽样 | 阻塞官方 S1 启动 |
+| A0.2 keep governance / execution audit | `holdout_access_log.tsv`、`test_family_registry`、SQLite WAL `experiment_ledger`、冻结模型 registry、`execution_label_audit`、`execution_audit/orders_audit`、`daily_turnover_capacity_report` | 防止 close-to-close 标签冒充账户 PnL，并让 S1 keep 可审计 | 预计 3-6 周；用未复权 OHLCV、`tradability_daily_enriched`、`universe_daily`、成本表和执行规则生成 T+1 open/proxy、3/5 日分批、未成交 carryover、解锁反转、orders audit 和 ledger hash；先用日频 L1 代理，标明非分钟/集合竞价 | 阻塞 factor keep、holdout 终验、S1-D/S1-R tighten-only 和任何日频 alpha 声明 |
 | P1 total-return | 官方或授权公司行为主表 | 补全分红送配、除权除息和 total-return 会计 | 优先交易所/巨潮/授权源；统一 `asset_id`、公告日、股权登记日、除权日、现金分红、送转配；与当前 sanity reference 和 adjusted-vs-raw event-like 样本交叉校验 | 阻塞完整 total-return accounting 和基本面增强叙事 |
 | P1 execution data | `limit_events`、分钟/集合竞价/开盘成交明细 | 支持真实开盘冲击、未成交队列和日频 alpha sleeve | 先做 source registration 和样本日 smoke test；清洗为事件表和 1/5min 分区表，区分盘中可见字段和盘后统计字段，生成 `available_at/decision_time` 与成交失败审计 | 阻塞日频 alpha sleeve、精细执行和三段开盘模型 |
 | P1/P1.5 flows and derivatives | 融资融券、北向、ETF flow、市场宽度/涨跌停压力、股指期货 basis/OI | 改善拥挤、资金流和风控解释 | 按源逐项登记 vendor/license/披露时点；统一交易日历和代码映射；做 coverage、重复键、异常值、PIT 和 leakage audit | 不阻塞 market-only S1-M，但阻塞可部署风控增强 |
-| P1.5 GMSL | FRED 替代源、DXY/USDCNH、UST、Brent/WTI/SC、全球股指/期货、MOVE、商品、地缘事件日历 | 完整外生冲击层 | 保留 Cboe 局部成功；为 FRED 超时源准备 vendor mirror 或下载替代；所有海外源先转 UTC，再按 A 股 T 日 16:00 session cutoff 顺延；阈值只用训练窗计算；输出 coverage、timezone、source_fetch 和 shock-state audit | GMSL 继续只能 partial stress report，不能进入 alpha、选模或调阈值 |
+| P1.5 GMSL | GMSL-v1 partial stress report；GMSL-v2 FRED 替代源、DXY/USDCNH、UST、Brent/WTI/SC、全球股指/期货、MOVE、商品、地缘事件日历 | 完整外生冲击层 | v1 只使用 Cboe VIX/OVX/GVZ、国债收益率和 Shibor 的 candidate 数据输出 stress report；v2 为 FRED 超时源准备 fredapi、Nasdaq Data Link/Quandl、vendor mirror 或下载替代；所有海外源先转 UTC，再按 A 股 T 日 16:00 session cutoff 顺延；阈值只用训练窗 10 年 lookback 分位数计算；输出 coverage、timezone、source_fetch 和 shock-state audit | GMSL 继续只能 partial stress report，不能进入 alpha、选模或调阈值 |
 | P1 hygiene | schema registry 和 source registry 卫生 | 让数据升格和机器审计闭环可读可验 | 补登记 `corporate_actions`、治理产物、`limit_events`、`prices_minute/auction`；清理 GMSL schema 描述乱码；按 `availability_bucket/status` 做条件非空校验，并在升格前重算 schema/source registry hash | 不阻塞 market-only 研究，但阻塞数据升格 |
 | P2 alpha explainability | 财报公告日、分析师预期、股东户数、质押、龙虎榜、大宗交易、新闻事件 | 基本面和事件解释力 | 待 Step 1-4 稳定后再立项；先解决授权、披露时点、代码映射、文本去重和 survivorship；未审计前只做 candidate tracking | 不阻塞近期 S1-M |
 
@@ -1293,10 +1324,10 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 
 ### 新增验证项
 
-1. **因子正交化流程**：单因子、等权和原始 ICIR 先作为基线；随后按训练窗口 ICIR 降序做 Gram-Schmidt 正交化，作为 ICIR 复合和 Ridge/ElasticNet 前的可复现对照分支，产物为正交化前后因子相关性矩阵、排序规则和覆盖率报告。
+1. **因子正交化流程**：单因子、等权和原始 ICIR 先作为基线；随后按固定经济逻辑顺序做 Gram-Schmidt 正交化，作为 ICIR 复合和 Ridge/ElasticNet 前的可复现对照分支，产物为正交化前后因子相关性矩阵、排序规则、step 间一致性和覆盖率报告。
 2. **regime断裂检测**：在 walk-forward 每个 OOT step 中单独报告 regime 断裂期表现，增加成熟 IC/因子收益的 yellow/red 状态机。IC 告警先只作为报告、quarantine 和重新验证触发；暂停交易、降权或减仓必须经 walk-forward 验证后才能成为实际规则。实时风险开关应优先使用 ex-ante 市场宽度、波动率、跌停压力和成交额等变量。
 3. **尾部风险指标**：S1验证中增加VaR 95%、CVaR 99%、最大回撤持续期。
-4. **多重检验校正**：候选因子>20个时，必须报告FDR校正后的显著性；默认使用 Benjamini-Hochberg，因子相关性高或有效假设数不清晰时补 Storey-q 诊断，并在实验台账记录触发指标、有效假设数和 q 值。
+4. **多重检验校正**：FDR 按完整实验族触发和报告，而不是只看候选因子列数；当因子 × 标签 × 模型 × 半衰期 × 训练窗口 × 正交化分支 × 执行规则的累计尝试数超过 20 时，必须报告校正后的显著性。默认使用 Benjamini-Hochberg，因子相关性高或有效假设数不清晰时补 Storey-q 诊断，并在实验台账记录 `test_family_id`、累计 `attempt_count`、触发指标、有效假设数和 q 值。
 5. **季节性效应**：默认采用方案 B，即 5 年 walk-forward 训练窗口覆盖完整年度周期；S1 不默认加入月份哑变量，月份哑变量只能作为后续 S3 或敏感性分析的预注册候选。
 6. **IC 自相关调整**：IC t-stat 默认使用 Newey-West HAC 调整；相邻 walk-forward step 的训练窗口重叠率按实际窗口计算并披露，不使用未经核验的固定估算比例。
 7. **A 股制度性风险对照**：S1 增加涨跌停排除 IC、注册制阶段和流动性枯竭日切片，所有压力窗口需预注册，不得用于事后择优。
@@ -1332,7 +1363,7 @@ run_id	track_id	label_id	calendar_id	panel_hash	execution_rule_id	baseline_run_i
 | ADV新股不足标记检查 | 确认capacity报告不被新股异常成交额污染 | 1小时 |
 | 不同embargo值（5/10/15）的OOT结果对比 | 敏感性报告，不择优；默认仍为 10 日 | 3小时 |
 | purge敏感性（40/60/80日） | 验证隔离阈值稳健性，阻塞正式keep/晋级 | 8-16小时 |
-| block bootstrap block敏感性（10/21/40日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 2-4小时 |
+| block bootstrap block敏感性（10/21/42日） | 验证 p-value 对 block_days 的稳健性，不得择优 | 2-4小时 |
 | concept shift预注册诊断 | 输出成熟 IC 状态机、描述性分段、分布漂移、拥挤容量和等权 vs row-equal/date-balanced 指数衰减对照；不放宽S1 hard gate | 4-8小时 |
 
 预备诊断的 24 步只作为最低验证规模和快速 smoke；完整主证据必须按交易日历生成全量 OOT step，单独估算耗时，不得用 24 步耗时代表最终 S1 全量运行成本。

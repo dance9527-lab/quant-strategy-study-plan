@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-01-execution-governance-hardening",
+  "version": "2026-05-01-final-review-independent-sync",
   "scope": "official_strategy_evidence",
   "parameter_basis": [
     "quant_strategy_plan.md",
@@ -48,6 +48,8 @@
     ],
     "source_registry_statuses_are_secondary_to_availability_bucket": true,
     "source_registry_status_column_name": "status",
+    "source_registry_status_must_distinguish_planned_no_etl_script": true,
+    "source_registry_planned_no_etl_status_prefix": "planned_source_registered_no_etl_script",
     "warehouse_core_time_status_field_name": "source_status",
     "source_registry_and_warehouse_source_status_are_distinct": true,
     "source_registry_conditional_non_empty_check_required_before_promotion": true,
@@ -193,6 +195,10 @@
     "rebalance_interval_trading_days": 21,
     "model_refit_interval_trading_days": 63,
     "predictions_between_refits": "use_latest_frozen_model_version_with_valid_train_end_rule",
+    "event_triggered_refit_allowed_current_s1": false,
+    "event_triggered_refit_policy": "GMSL red or IC three-negative-step signals may trigger report_quarantine_or_pre_registered_revalidation_only; they must not switch models, retrain immediately, tune thresholds, select features, or change positions in the current step",
+    "gmsl_red_refit_forbidden_before_gmsl_validation": true,
+    "ic_three_negative_steps_action": "early_revalidation_report_only_not_model_refit",
     "frozen_model_registry_required": true,
     "frozen_model_registry_file": "frozen_model_registry_v1.parquet",
     "frozen_model_artifact_root": "model_artifacts/frozen_models",
@@ -266,9 +272,10 @@
     ],
     "prediction_files_must_reference_step_id_and_calendar_hash": true,
     "base_purge_days": 40,
-    "computed_purge_days_rule": "max(label_horizon_trading_days * purge_multiplier, base_purge_days)",
+    "computed_purge_days_rule": "track_and_label_specific; alpha keep uses max(label_horizon_trading_days * purge_multiplier, base_purge_days); S1-D/S1-R 1d risk/execution report uses 20 trading days with 10/20/40 sensitivity and cannot support alpha keep by itself",
     "computed_purge_days_examples": {
-      "1": 40,
+      "S1-D_or_S1-R_1d_risk_execution_report": 20,
+      "generic_alpha_keep_1d": 40,
       "5": 40,
       "10": 40,
       "20": 60
@@ -342,6 +349,19 @@
         "min_position_overlap_prev_day": 0.85,
         "single_name_daily_delta_cap": 0.02,
         "single_side_turnover_cap_daily": 0.1,
+        "layered_clipping_priority": [
+          "rule_3_total_single_side_turnover_cap",
+          "rule_2_industry_cap_if_enabled",
+          "rule_1_single_name_delta_cap"
+        ],
+        "layered_clipping_algorithm": [
+          "compute_ideal_rebalance_weights",
+          "scale_trade_deltas_to_total_turnover_cap",
+          "scale_trade_deltas_within_over_cap_industries",
+          "clip_single_name_trade_deltas",
+          "renormalize_after_each_layer_and_report_residual_cash_or_unfilled_weight"
+        ],
+        "industry_cap_required_if_industry_constraint_enabled": true,
         "turnover_controls_role": "offline_audit_and_future_upgrade_gate"
       },
       "dynamic_ic_turnover": {
@@ -402,12 +422,11 @@
       "s1d_block_bootstrap": {
         "default_block_days": 21,
         "sensitivity_days": [
-          5,
           10,
           21,
-          40
+          42
         ],
-        "promotion_rule": "most_conservative_among_10_21_40"
+        "promotion_rule": "most_conservative_among_10_21_42"
       },
       "production_output_field_policy": {
         "offline_weight_field": "offline_sim_target_weight",
@@ -437,8 +456,16 @@
     }
   },
   "label_rules": {
-    "purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
-    "qant_10d_legacy_note": "Historical qant diagnostic experiments may use purge_days=10 only when explicitly labeled exploratory and excluded from keep decisions. New official evidence must use max(horizon*3,40).",
+    "alpha_keep_purge_days_min_rule": "max(label_horizon_trading_days * default_walk_forward.purge_multiplier, default_walk_forward.base_purge_days)",
+    "s1d_s1r_1d_risk_execution_purge_days": 20,
+    "s1d_s1r_1d_purge_sensitivity_days": [
+      10,
+      20,
+      40
+    ],
+    "s1d_s1r_1d_purge_role": "risk_execution_report_and_misalignment_audit_only_not_alpha_keep",
+    "purge_days_min_rule": "alpha keep uses max(horizon*3,40); S1-D/S1-R 1d risk/execution report uses 20 with 10/20/40 sensitivity",
+    "qant_10d_legacy_note": "Historical qant diagnostic experiments may use purge_days=10 only when explicitly labeled exploratory and excluded from keep decisions. New official alpha keep evidence must use max(horizon*3,40); S1-D/S1-R 1d risk/execution report uses its separate 20-day rule.",
     "purge_sensitivity_days": [
       40,
       60,
@@ -477,8 +504,16 @@
     "rank_ic_t_stat_min": 1.65,
     "ic_t_stat_method": "newey_west_hac_adjusted",
     "rank_ic_t_stat_uses_hac": true,
-    "newey_west_bandwidth_selection": "deterministic_rule_of_thumb",
+    "newey_west_bandwidth_selection": "deterministic_rule_of_thumb_with_sensitivity",
     "newey_west_bandwidth_rule": "lag_floor_4_times_n_over_100_power_2_over_9_min_1",
+    "newey_west_bandwidth_sensitivity_required": true,
+    "newey_west_bandwidth_sensitivity": [
+      "default_formula",
+      "andrews_1991",
+      "lag_6",
+      "lag_12"
+    ],
+    "newey_west_keep_policy": "use_most_conservative_bandwidth_result_for_keep_or_promotion",
     "bootstrap_p_max": 0.1,
     "stat_gate_logic": "rank_ic_t_stat >= rank_ic_t_stat_min AND block_bootstrap_p < bootstrap_p_max for keep; if only one passes status is inconclusive",
     "block_unit": "trading_days",
@@ -489,16 +524,27 @@
     "block_bootstrap_sensitivity_days": [
       10,
       21,
-      40
+      42
     ],
     "bootstrap_samples_min": 5000,
-    "fdr_required_if_factor_count_gt": 20,
+    "fdr_required_if_full_test_family_attempts_gt": 20,
+    "factor_count_gt_20_is_advisory_not_authoritative_trigger": true,
     "fdr_default_method": "benjamini_hochberg",
     "fdr_storey_q_report_required_when_factor_correlation_high": true,
     "fdr_storey_q_trigger_metric": "max_abs_pairwise_factor_correlation_or_effective_hypothesis_ratio",
     "fdr_storey_q_trigger_threshold": 0.6,
     "fdr_storey_q_pi0_estimator": "bootstrap_or_smoother_on_preregistered_lambda_grid",
-    "fdr_applies_to": "candidate_factor_families_gt_20_and_any_keep_or_promotion_decision",
+    "fdr_applies_to": "full_test_family_for_any_keep_or_promotion_decision",
+    "fdr_test_family_dimensions": [
+      "factor",
+      "label",
+      "model",
+      "half_life",
+      "training_window",
+      "orthogonalization_branch",
+      "execution_rule"
+    ],
+    "attempt_count_scope": "cumulative_across_full_test_family_not_single_run",
     "statistical_conflict_status_enum": [
       "pass",
       "inconclusive",
@@ -706,7 +752,12 @@
       "coverage_start",
       "coverage_end",
       "quality_report",
-      "allowed_stage"
+      "allowed_stage",
+      "direction_confidence_tier",
+      "pre_registered_direction",
+      "literature_support_count",
+      "test_sidedness",
+      "oot_direction_change_forbidden"
     ],
     "p1_market_only_factor_families": [
       "momentum",
@@ -727,15 +778,59 @@
       "cash_flow_quality"
     ],
     "p2_fundamental_quality_allowed_stage": "candidate_tracking_only_until_announcement_date_report_period_restatement_and_vendor_compute_time_pit_audit",
+    "factor_direction_registry_required": true,
+    "factor_direction_tiers": {
+      "tier_1_high_confidence": {
+        "minimum_independent_literature_support_count": 3,
+        "direction_required_before_oot": true,
+        "test_sidedness": "one_sided",
+        "p_value_threshold": 0.025,
+        "examples": [
+          "size",
+          "value_ep_bp",
+          "liquidity",
+          "short_term_reversal"
+        ]
+      },
+      "tier_2_medium_confidence": {
+        "minimum_independent_literature_support_count": 1,
+        "direction_required_before_oot": true,
+        "direction_flip_check_required": true,
+        "examples": [
+          "momentum",
+          "volatility"
+        ]
+      },
+      "tier_3_exploratory": {
+        "test_sidedness": "two_sided",
+        "p_value_threshold": 0.01,
+        "max_directions_tested": 2
+      }
+    },
+    "oot_direction_change_forbidden": true,
     "orthogonalization": {
       "enabled_for_composite_models": true,
       "method": "gram_schmidt",
       "input": "cross_sectional_zscore_factors_after_winsorization_and_neutralization_if_used",
-      "ordering": "descending_in_sample_icir_from_training_window_only",
+      "ordering": "fixed_economic_logic_order_v1",
+      "fixed_order_v1": [
+        "market",
+        "industry",
+        "size",
+        "value_or_market_slow_variables",
+        "liquidity_turnover",
+        "momentum",
+        "reversal",
+        "volatility",
+        "beta",
+        "other_alpha_candidates"
+      ],
+      "pca_allowed_stage": "v2_candidate_only_not_s1_mainline",
       "outputs_required": [
         "factor_correlation_matrix_before",
         "factor_correlation_matrix_after",
         "orthogonalization_order",
+        "orthogonalization_order_spearman_stability",
         "coverage_and_missingness_report"
       ],
       "applies_between": "after_raw_single_factor_equal_weight_and_icir_baselines_before_ridge_elasticnet_models",
@@ -901,10 +996,12 @@
     "default_alert_state_machine": {
       "input_series": "matured_walk_forward_ic_or_factor_return_series_only",
       "window_steps": 6,
-      "yellow_if_negative_steps_in_last_window_gte": 4,
+      "yellow_if_negative_steps_in_last_window_gte": 5,
       "red_if_consecutive_negative_steps": 6,
-      "yellow_action": "flag_candidate_and_require_equal_weight_vs_decay_and_segment_report",
+      "yellow_action": "flag_candidate_and_require_equal_weight_vs_decay_segment_report_and_pre_registered_revalidation",
       "red_action": "quarantine_new_keep_or_promotion_until_next_pre_registered_revalidation_passes",
+      "ic_three_negative_steps_action": "early_revalidation_report_only_not_refit",
+      "gmsl_red_action_before_validation": "stress_report_only_not_refit_model_switch_or_threshold_change",
       "current_step_action_forbidden": true,
       "human_intervention_required": false
     },
@@ -1006,10 +1103,15 @@
       "source_registry_hash",
       "track_registry_v1",
       "walk_forward_calendar_with_actual_oot_step_count",
+      "WalkForwardCalendarValidator",
       "walk_forward_calendar_hash",
       "train_cutoff_purge_embargo_validation",
       "validation_params_hash",
-      "survivorship_bias_audit"
+      "universe_daily_construction_audit",
+      "survivorship_bias_audit",
+      "valuation_coverage_audit",
+      "suspension_precision_recall_audit",
+      "valuation_available_at_sample_audit"
     ],
     "blocking_before_factor_keep": [
       "valuation_gap_sensitivity_for_valuation_features",
@@ -1018,6 +1120,10 @@
       "equal_weight_control_vs_exponential_decay_report",
       "row_equal_vs_date_balanced_decay_report",
       "holdout_access_log",
+      "test_family_registry",
+      "sqlite_experiment_ledger",
+      "factor_direction_registry",
+      "frozen_model_registry",
       "daily_orders_audit_for_S1-D",
       "daily_turnover_capacity_report_for_S1-D",
       "execution_label_audit",
@@ -1034,15 +1140,41 @@
     "execute_without_user_instruction": false,
     "priority_layers": [
       {
-        "priority": "P0_governance",
+        "priority": "A0_1_governance_blocks_s1_start",
         "artifacts": [
           "track_registry_v1",
-          "walk_forward_calendar_v1",
+          "walk_forward_calendar_S1M_v1",
+          "WalkForwardCalendarValidator",
+          "validation_params_hash",
+          "universe_daily_construction_audit",
+          "valuation_coverage_audit",
+          "suspension_precision_recall_audit",
+          "valuation_available_at_sample_audit"
+        ],
+        "purpose": "make S1-M startup calendar and basic sample boundaries reproducible",
+        "phase": "A0.1_blocks_s1_start",
+        "work_estimate": "2_to_3_weeks_total_for_A0_1_governance_subset",
+        "blocks": [
+          "official_s1_start",
+          "official_s1_main_evidence"
+        ]
+      },
+      {
+        "priority": "A0_2_keep_governance_and_execution_audit",
+        "artifacts": [
           "holdout_access_log.tsv",
           "test_family_registry",
-          "experiment_ledger"
+          "frozen_model_registry",
+          "sqlite_wal_experiment_ledger",
+          "factor_direction_registry",
+          "ModelRegistry",
+          "execution_label_audit",
+          "execution_audit/orders_audit",
+          "daily_turnover_capacity_report"
         ],
-        "purpose": "make S1-M and S1-D/S1-R validation boundaries reproducible",
+        "purpose": "separate close-to-close IC labels from executable account PnL and make keep decisions auditable",
+        "phase": "A0.2_blocks_s1_keep",
+        "work_estimate": "3_to_6_weeks_total_for_A0_2_execution_and_ledger_subset",
         "holdout_access_log_min_fields": [
           "timestamp",
           "operator",
@@ -1056,20 +1188,8 @@
         ],
         "burned_holdout_shadow_period_trading_days": 252,
         "blocks": [
-          "official_s1_main_evidence",
-          "holdout_final_acceptance"
-        ]
-      },
-      {
-        "priority": "P0_execution_audit",
-        "artifacts": [
-          "execution_label_audit",
-          "execution_audit/orders_audit",
-          "daily_turnover_capacity_report"
-        ],
-        "purpose": "separate close-to-close IC labels from executable account PnL",
-        "blocks": [
           "factor_keep",
+          "holdout_final_acceptance",
           "s1d_tighten_only",
           "daily_alpha_claim"
         ]
@@ -1143,6 +1263,17 @@
     ]
   },
   "experiment_ledger": {
+    "storage_backend": "sqlite_wal",
+    "canonical_artifact": "experiment_ledger.sqlite",
+    "sqlite_wal_required": true,
+    "duckdb_role": "read_only_analysis_query_only",
+    "tsv_csv_exports_allowed_for_reports": true,
+    "field_layers": {
+      "core": "manual_or_required_identifiers_and_decision_fields",
+      "validation": "automated_metrics_and_statistical_tests",
+      "audit": "leakage_pit_benchmark_execution_and_gmsl_status",
+      "metadata": "hashes_versions_commands_and_environment"
+    },
     "required_fields": [
       "track_id",
       "label_id",
@@ -1251,6 +1382,7 @@
     "status": "required_before_factor_keep_or_daily_alpha_claim",
     "compare_labels": [
       "close_to_close_adjusted",
+      "rebalance_to_rebalance_execution_aligned",
       "t_plus_1_open_or_proxy",
       "vwap_or_split_execution_proxy"
     ],
@@ -1270,6 +1402,7 @@
     "required_metrics": [
       "correlation",
       "sign_agreement",
+      "ic_delta_vs_fixed_horizon_label",
       "pnl_drift",
       "cost_drag",
       "failed_order_carryover"
